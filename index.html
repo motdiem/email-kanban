@@ -724,32 +724,38 @@
         </div>
     </div>
 
+    <!-- Configuration: Copy config.example.js to config.js and add your OAuth client IDs -->
+    <script src="config.js"></script>
+
     <script>
         // ============================================================
         // CONFIGURATION
         // ============================================================
+        // Load from external config.js or use defaults
+        const EXT_CONFIG = window.EMAIL_KANBAN_CONFIG || {};
+
         const CONFIG = {
             microsoft: {
-                clientId: 'f3fb795c-20f1-45ff-93e1-affb189b3c63',
-                authority: 'https://login.microsoftonline.com/organizations',
-                redirectUri: 'http://localhost:8000/index.html',
-                scopes: ['Mail.Read', 'Mail.ReadWrite', 'Mail.Read.Shared', 'Mail.ReadWrite.Shared']
+                clientId: EXT_CONFIG.microsoft?.clientId || 'YOUR_MICROSOFT_CLIENT_ID',
+                authority: EXT_CONFIG.microsoft?.authority || 'https://login.microsoftonline.com/organizations',
+                redirectUri: EXT_CONFIG.microsoft?.redirectUri || window.location.origin + '/index.html',
+                scopes: EXT_CONFIG.microsoft?.scopes || ['Mail.Read', 'Mail.ReadWrite', 'Mail.Read.Shared', 'Mail.ReadWrite.Shared']
             },
             google: {
-                clientId: '137087085876-qh4t8nia5ussmrftkvrk71btsdhffqn7.apps.googleusercontent.com',
-                scopes: 'https://www.googleapis.com/auth/gmail.modify'
+                clientId: EXT_CONFIG.google?.clientId || 'YOUR_GOOGLE_CLIENT_ID',
+                scopes: EXT_CONFIG.google?.scopes?.[0] || 'https://www.googleapis.com/auth/gmail.modify'
             },
             yahoo: {
                 clientId: 'YOUR_YAHOO_CLIENT_ID_HERE'
             },
             ticktick: {
-                clientId: '', // Set your Client ID here or enter in account setup
-                clientSecret: '', // Set your Client Secret here or enter in account setup
-                redirectUri: 'http://localhost:8000/index.html',
-                authUrl: 'https://ticktick.com/oauth/authorize',
-                tokenUrl: 'https://ticktick.com/oauth/token',
-                apiBase: 'https://api.ticktick.com/open/v1',
-                scopes: 'tasks:read tasks:write'
+                clientId: EXT_CONFIG.ticktick?.clientId || '',
+                clientSecret: EXT_CONFIG.ticktick?.clientSecret || '',
+                redirectUri: EXT_CONFIG.ticktick?.redirectUri || window.location.origin + '/index.html',
+                authUrl: EXT_CONFIG.ticktick?.authUrl || 'https://ticktick.com/oauth/authorize',
+                tokenUrl: EXT_CONFIG.ticktick?.tokenUrl || 'https://ticktick.com/oauth/token',
+                apiBase: EXT_CONFIG.ticktick?.apiBase || 'https://api.ticktick.com/open/v1',
+                scopes: EXT_CONFIG.ticktick?.scopes?.join(' ') || 'tasks:read tasks:write'
             }
         };
 

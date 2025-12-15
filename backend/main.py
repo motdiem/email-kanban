@@ -462,6 +462,30 @@ async def toggle_task_complete(
 
 
 # ============================================================
+# Public Config (no auth required)
+# ============================================================
+@app.get("/config")
+async def get_public_config():
+    """Get public OAuth configuration (client IDs only, no secrets)."""
+    return {
+        "microsoft": {
+            "clientId": settings.microsoft_client_id,
+            "authority": "https://login.microsoftonline.com/organizations",
+            "scopes": ["Mail.Read", "Mail.ReadWrite", "Mail.Read.Shared", "Mail.ReadWrite.Shared"]
+        },
+        "google": {
+            "clientId": settings.google_client_id,
+            "scopes": ["https://www.googleapis.com/auth/gmail.modify"]
+        },
+        "ticktick": {
+            "clientId": settings.ticktick_client_id,
+            "authUrl": "https://ticktick.com/oauth/authorize",
+            "scopes": ["tasks:read", "tasks:write"]
+        }
+    }
+
+
+# ============================================================
 # Health Check
 # ============================================================
 @app.get("/health")

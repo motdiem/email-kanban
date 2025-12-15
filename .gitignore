@@ -3,6 +3,9 @@
 .env.local
 .env.*.local
 
+# User config (copy from config.example.js)
+config.js
+
 # Database
 data/
 *.db

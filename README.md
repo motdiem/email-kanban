@@ -77,10 +77,14 @@ Best for: Hosted deployment, multiple users, security
 ### Client-Only Mode
 
 ```bash
-# Serve the application
+# 1. Setup configuration
+cp config.example.js config.js
+# Edit config.js with your OAuth client IDs
+
+# 2. Serve the application
 python -m http.server 8000
 
-# Open in browser
+# 3. Open in browser
 open http://localhost:8000/index.html
 ```
 
@@ -125,6 +129,7 @@ open http://localhost:8000
 email-kanban/
 ├── index.html              # Client-only frontend (no backend needed)
 ├── index-backend.html      # Backend-enabled frontend
+├── config.example.js       # OAuth config template (copy to config.js)
 ├── README.md               # This documentation
 │
 ├── backend/                # FastAPI backend
