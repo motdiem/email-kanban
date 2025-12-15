@@ -15,7 +15,10 @@ from database import (
     delete_item, clear_account_items, get_last_sync
 )
 from oauth import get_oauth_provider
-from providers import MicrosoftProvider, GmailProvider, TickTickProvider, get_start_of_week_paris
+from providers import (
+    MicrosoftProvider, GmailProvider, TickTickProvider,
+    YahooProvider, ICloudProvider, get_start_of_week_paris
+)
 
 settings = get_settings()
 
@@ -47,6 +50,11 @@ class AccountCreate(BaseModel):
     color: str = "#0078d4"
     shared_mailbox: Optional[str] = None
     gmail_account_number: Optional[int] = 0
+    # For Yahoo (email needed for IMAP login with OAuth token)
+    yahoo_email: Optional[str] = None
+    # For iCloud (uses app-specific password instead of OAuth)
+    icloud_email: Optional[str] = None
+    icloud_app_password: Optional[str] = None
 
 
 class AccountUpdate(BaseModel):
@@ -54,6 +62,8 @@ class AccountUpdate(BaseModel):
     color: Optional[str] = None
     shared_mailbox: Optional[str] = None
     gmail_account_number: Optional[int] = None
+    icloud_email: Optional[str] = None
+    icloud_app_password: Optional[str] = None
 
 
 # ============================================================
@@ -204,10 +214,33 @@ async def add_account(account: AccountCreate, session: dict = Depends(get_curren
         "gmail_account_number": account.gmail_account_number
     }
 
+    email = ""
+
+    # Yahoo needs email for IMAP login with OAuth token
+    if account.provider == "yahoo":
+        if not account.yahoo_email:
+            raise HTTPException(
+                status_code=400,
+                detail="Yahoo requires email address"
+            )
+        email = account.yahoo_email
+
+    # iCloud uses app-specific password instead of OAuth
+    if account.provider == "icloud":
+        if not account.icloud_email or not account.icloud_app_password:
+            raise HTTPException(
+                status_code=400,
+                detail="iCloud requires email and app-specific password"
+            )
+        config["icloud_email"] = account.icloud_email
+        config["icloud_app_password"] = account.icloud_app_password
+        email = account.icloud_email
+
     new_account = await create_account(
         id=account_id,
         name=account.name,
         provider=account.provider,
+        email=email,
         color=account.color,
         config=config
     )
@@ -340,20 +373,38 @@ async def get_account_items(
 
     # Fetch fresh data
     try:
-        access_token = await get_valid_token(account)
         start_date = get_start_of_week_paris()
 
-        if provider in ("office365", "office365-shared"):
-            api = MicrosoftProvider(access_token)
-            items = await api.get_emails(start_date, config.get("shared_mailbox"))
-        elif provider == "gmail":
-            api = GmailProvider(access_token)
-            items = await api.get_emails(start_date, config.get("gmail_account_number", 0))
-        elif provider == "ticktick":
-            api = TickTickProvider(access_token)
-            items = await api.get_tasks()
+        # iCloud doesn't use OAuth - uses app-specific password
+        if provider == "icloud":
+            icloud_email = config.get("icloud_email")
+            icloud_password = config.get("icloud_app_password")
+            if not icloud_email or not icloud_password:
+                raise HTTPException(status_code=401, detail="iCloud credentials not configured")
+            api = ICloudProvider(icloud_email, icloud_password)
+            items = await api.get_emails(start_date)
         else:
-            raise HTTPException(status_code=400, detail=f"Unknown provider: {provider}")
+            # OAuth-based providers
+            access_token = await get_valid_token(account)
+
+            if provider in ("office365", "office365-shared"):
+                api = MicrosoftProvider(access_token)
+                items = await api.get_emails(start_date, config.get("shared_mailbox"))
+            elif provider == "gmail":
+                api = GmailProvider(access_token)
+                items = await api.get_emails(start_date, config.get("gmail_account_number", 0))
+            elif provider == "yahoo":
+                # Yahoo needs email address for IMAP login
+                email_address = account.get("email", "")
+                if not email_address:
+                    raise HTTPException(status_code=401, detail="Yahoo email address not found")
+                api = YahooProvider(access_token, email_address)
+                items = await api.get_emails(start_date)
+            elif provider == "ticktick":
+                api = TickTickProvider(access_token)
+                items = await api.get_tasks()
+            else:
+                raise HTTPException(status_code=400, detail=f"Unknown provider: {provider}")
 
         # Update cache
         await clear_account_items(account_id, item_type)
@@ -477,10 +528,19 @@ async def get_public_config():
             "clientId": settings.google_client_id,
             "scopes": ["https://www.googleapis.com/auth/gmail.modify"]
         },
+        "yahoo": {
+            "clientId": settings.yahoo_client_id,
+            "authUrl": "https://api.login.yahoo.com/oauth2/request_auth",
+            "scopes": ["mail-r"]
+        },
         "ticktick": {
             "clientId": settings.ticktick_client_id,
             "authUrl": "https://ticktick.com/oauth/authorize",
             "scopes": ["tasks:read", "tasks:write"]
+        },
+        "icloud": {
+            "requiresAppPassword": True,
+            "helpUrl": "https://support.apple.com/en-us/HT204397"
         }
     }
 

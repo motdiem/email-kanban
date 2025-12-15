@@ -21,6 +21,10 @@ class Settings(BaseSettings):
     ticktick_client_id: str = ""
     ticktick_client_secret: str = ""
 
+    # Yahoo
+    yahoo_client_id: str = ""
+    yahoo_client_secret: str = ""
+
     # Database
     database_url: str = "sqlite+aiosqlite:///./data/kanban.db"
 

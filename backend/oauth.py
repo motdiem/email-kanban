@@ -123,6 +123,69 @@ class GoogleOAuth(OAuthProvider):
             return response.json()
 
 
+class YahooOAuth(OAuthProvider):
+    """Yahoo OAuth provider."""
+
+    AUTH_URL = "https://api.login.yahoo.com/oauth2/request_auth"
+    TOKEN_URL = "https://api.login.yahoo.com/oauth2/get_token"
+    SCOPES = ["mail-r"]  # Read mail scope
+
+    def get_auth_url(self, state: str, scopes: list = None) -> str:
+        scopes = scopes or self.SCOPES
+        params = {
+            "client_id": self.client_id,
+            "response_type": "code",
+            "redirect_uri": self.redirect_uri,
+            "scope": " ".join(scopes),
+            "state": state
+        }
+        return f"{self.AUTH_URL}?{urlencode(params)}"
+
+    async def exchange_code(self, code: str) -> dict:
+        import base64
+        # Yahoo requires Basic auth header for token exchange
+        credentials = base64.b64encode(
+            f"{self.client_id}:{self.client_secret}".encode()
+        ).decode()
+
+        async with httpx.AsyncClient() as client:
+            response = await client.post(
+                self.TOKEN_URL,
+                headers={
+                    "Authorization": f"Basic {credentials}",
+                    "Content-Type": "application/x-www-form-urlencoded"
+                },
+                data={
+                    "code": code,
+                    "redirect_uri": self.redirect_uri,
+                    "grant_type": "authorization_code"
+                }
+            )
+            response.raise_for_status()
+            return response.json()
+
+    async def refresh_token(self, refresh_token: str) -> dict:
+        import base64
+        credentials = base64.b64encode(
+            f"{self.client_id}:{self.client_secret}".encode()
+        ).decode()
+
+        async with httpx.AsyncClient() as client:
+            response = await client.post(
+                self.TOKEN_URL,
+                headers={
+                    "Authorization": f"Basic {credentials}",
+                    "Content-Type": "application/x-www-form-urlencoded"
+                },
+                data={
+                    "refresh_token": refresh_token,
+                    "grant_type": "refresh_token"
+                }
+            )
+            response.raise_for_status()
+            return response.json()
+
+
 class TickTickOAuth(OAuthProvider):
     """TickTick OAuth provider."""
 
@@ -185,6 +248,12 @@ def get_oauth_provider(provider: str) -> Optional[OAuthProvider]:
         return GoogleOAuth(
             client_id=settings.google_client_id,
             client_secret=settings.google_client_secret,
+            redirect_uri=redirect_uri
+        )
+    elif provider == "yahoo":
+        return YahooOAuth(
+            client_id=settings.yahoo_client_id,
+            client_secret=settings.yahoo_client_secret,
             redirect_uri=redirect_uri
         )
     elif provider == "ticktick":

@@ -308,3 +308,145 @@ class TickTickProvider:
             )
             response.raise_for_status()
             return True
+
+
+class IMAPProvider:
+    """Base IMAP email provider."""
+
+    def __init__(self, host: str, port: int, username: str, password: str):
+        self.host = host
+        self.port = port
+        self.username = username
+        self.password = password
+
+    async def get_emails(self, start_date: datetime) -> list:
+        """Fetch emails from inbox via IMAP."""
+        import asyncio
+        from aioimaplib import aioimaplib
+        import email
+        from email.header import decode_header
+        from email.utils import parsedate_to_datetime
+
+        emails = []
+
+        try:
+            # Connect to IMAP server
+            imap = aioimaplib.IMAP4_SSL(host=self.host, port=self.port)
+            await imap.wait_hello_from_server()
+
+            # Login
+            await imap.login(self.username, self.password)
+
+            # Select inbox
+            await imap.select('INBOX')
+
+            # Search for emails since start_date
+            date_str = start_date.strftime("%d-%b-%Y")
+            _, data = await imap.search(f'SINCE {date_str}')
+
+            if data[0]:
+                message_ids = data[0].split()
+
+                # Fetch each message (limit to most recent 200)
+                for msg_id in message_ids[-200:]:
+                    try:
+                        _, msg_data = await imap.fetch(msg_id.decode(), '(RFC822.HEADER)')
+
+                        if msg_data and len(msg_data) > 1:
+                            raw_email = msg_data[1]
+                            if isinstance(raw_email, tuple) and len(raw_email) > 1:
+                                msg = email.message_from_bytes(raw_email[1])
+
+                                # Decode subject
+                                subject = msg.get('Subject', '')
+                                if subject:
+                                    decoded = decode_header(subject)
+                                    subject = ''.join(
+                                        part.decode(charset or 'utf-8') if isinstance(part, bytes) else part
+                                        for part, charset in decoded
+                                    )
+
+                                # Decode sender
+                                sender = msg.get('From', '')
+                                if sender:
+                                    decoded = decode_header(sender)
+                                    sender = ''.join(
+                                        part.decode(charset or 'utf-8') if isinstance(part, bytes) else part
+                                        for part, charset in decoded
+                                    )
+                                    # Extract just the name part
+                                    if '<' in sender:
+                                        sender = sender.split('<')[0].strip().strip('"')
+
+                                # Parse date
+                                date_str = msg.get('Date', '')
+                                try:
+                                    received_dt = parsedate_to_datetime(date_str)
+                                except:
+                                    received_dt = datetime.now(PARIS_TZ)
+
+                                emails.append({
+                                    "id": msg_id.decode(),
+                                    "subject": subject or "(No subject)",
+                                    "sender": sender or "Unknown",
+                                    "receivedDateTime": received_dt.isoformat(),
+                                    "webLink": self._get_weblink(msg_id.decode()),
+                                    "provider": self._get_provider_name(),
+                                    "isStarred": False
+                                })
+                    except Exception as e:
+                        continue
+
+            await imap.logout()
+
+        except Exception as e:
+            raise Exception(f"IMAP error: {str(e)}")
+
+        return sorted(emails, key=lambda x: x.get("receivedDateTime") or "", reverse=True)
+
+    def _get_weblink(self, msg_id: str) -> str:
+        """Override in subclass to provide webmail link."""
+        return "#"
+
+    def _get_provider_name(self) -> str:
+        """Override in subclass."""
+        return "imap"
+
+
+class YahooProvider(IMAPProvider):
+    """Yahoo Mail provider using IMAP."""
+
+    def __init__(self, access_token: str, email_address: str):
+        # Yahoo uses OAuth token as password for IMAP
+        super().__init__(
+            host="imap.mail.yahoo.com",
+            port=993,
+            username=email_address,
+            password=access_token
+        )
+        self.email_address = email_address
+
+    def _get_weblink(self, msg_id: str) -> str:
+        return "https://mail.yahoo.com/"
+
+    def _get_provider_name(self) -> str:
+        return "yahoo"
+
+
+class ICloudProvider(IMAPProvider):
+    """iCloud Mail provider using IMAP with app-specific password."""
+
+    def __init__(self, email_address: str, app_password: str):
+        super().__init__(
+            host="imap.mail.me.com",
+            port=993,
+            username=email_address,
+            password=app_password
+        )
+        self.email_address = email_address
+
+    def _get_weblink(self, msg_id: str) -> str:
+        return "https://www.icloud.com/mail/"
+
+    def _get_provider_name(self) -> str:
+        return "icloud"

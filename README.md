@@ -1,6 +1,6 @@
 # Email & Task Kanban - Multi-Account Dashboard
 
-A web application that displays emails and tasks from multiple providers (Microsoft Office 365, Gmail, TickTick) in a Kanban-style board. View all your inboxes and tasks at a glance, organized by day of the week.
+A web application that displays emails and tasks from multiple providers (Microsoft Office 365, Gmail, Yahoo Mail, iCloud Mail, TickTick) in a Kanban-style board. View all your inboxes and tasks at a glance, organized by day of the week.
 
 ## Features
 
@@ -8,6 +8,8 @@ A web application that displays emails and tasks from multiple providers (Micros
 - **Microsoft Office 365** - Personal, work, and school accounts
 - **Office 365 Shared Mailboxes** - Access shared organizational mailboxes
 - **Gmail / Google Workspace** - Personal and work Google accounts
+- **Yahoo Mail** - Personal Yahoo accounts (OAuth + IMAP)
+- **iCloud Mail** - Apple ID accounts (app-specific password)
 - **TickTick Tasks** - View and manage tasks from TickTick
 
 ### Views
@@ -174,6 +176,10 @@ GOOGLE_CLIENT_SECRET=your-client-secret
 # TickTick OAuth
 TICKTICK_CLIENT_ID=your-client-id
 TICKTICK_CLIENT_SECRET=your-client-secret
+
+# Yahoo OAuth (backend mode only)
+YAHOO_CLIENT_ID=your-client-id
+YAHOO_CLIENT_SECRET=your-client-secret
 ```
 
 ### OAuth Redirect URIs
@@ -183,6 +189,8 @@ TICKTICK_CLIENT_SECRET=your-client-secret
 | Microsoft | `http://localhost:8000/index.html` | `http://localhost:8001/auth/callback/office365` |
 | Google | `http://localhost:8000/index.html` | `http://localhost:8001/auth/callback/gmail` |
 | TickTick | `http://localhost:8000/index.html` | `http://localhost:8001/auth/callback/ticktick` |
+| Yahoo | N/A (backend only) | `http://localhost:8001/auth/callback/yahoo` |
+| iCloud | N/A | N/A (uses app-specific password) |
 
 ---
 
@@ -226,6 +234,39 @@ TICKTICK_CLIENT_SECRET=your-client-secret
 2. Create new app
 3. Set **OAuth Redirect URL**: See table above
 4. Copy **Client ID** and **Client Secret**
+
+### Yahoo Mail (Backend Mode Only)
+
+> **Note**: Yahoo Mail requires IMAP access with OAuth tokens. This is only available in backend mode.
+
+1. Go to [Yahoo Developer Network](https://developer.yahoo.com/apps/)
+2. Click **Create an App**
+3. Configure:
+   - **Application Name**: `Email Kanban`
+   - **Application Type**: Web Application
+   - **Redirect URI**: `http://localhost:8001/auth/callback/yahoo`
+   - **API Permissions**: Check **Mail** (Read)
+4. Copy **Client ID** and **Client Secret**
+5. Add to your `.env`:
+   ```
+   YAHOO_CLIENT_ID=your-client-id
+   YAHOO_CLIENT_SECRET=your-client-secret
+   ```
+
+### iCloud Mail (Backend Mode Only)
+
+> **Note**: iCloud doesn't support OAuth. You must use an app-specific password.
+
+1. Sign in to [Apple ID](https://appleid.apple.com/)
+2. Go to **Sign-In and Security** → **App-Specific Passwords**
+3. Click **Generate an app-specific password**
+4. Name it (e.g., "Email Kanban")
+5. Copy the generated password (format: `xxxx-xxxx-xxxx-xxxx`)
+6. When adding iCloud account in the app:
+   - Enter your iCloud email address
+   - Enter the app-specific password (NOT your Apple ID password)
+
+For more details, see [Apple Support: App-specific passwords](https://support.apple.com/en-us/HT204397)
 
 ---
 
@@ -321,6 +362,7 @@ TICKTICK_CLIENT_SECRET=your-client-secret
 │ - MicrosoftOAuth: Azure AD / Graph API                      │
 │ - GoogleOAuth: Google Identity Platform                     │
 │ - TickTickOAuth: TickTick Open API                          │
+│ - YahooOAuth: Yahoo OAuth2 (for IMAP access)                │
 ├─────────────────────────────────────────────────────────────┤
 │ METHODS                                                     │
 │ - get_auth_url(state) - Generate authorization URL          │
@@ -335,6 +377,8 @@ TICKTICK_CLIENT_SECRET=your-client-secret
 │ - MicrosoftProvider: MS Graph API for emails                │
 │ - GmailProvider: Gmail API for emails                       │
 │ - TickTickProvider: TickTick API for tasks                  │
+│ - YahooProvider: Yahoo IMAP for emails                      │
+│ - ICloudProvider: iCloud IMAP for emails                    │
 ├─────────────────────────────────────────────────────────────┤
 │ METHODS                                                     │
 │ - get_emails(start_date) / get_tasks()                      │
