@@ -1,0 +1,2643 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Email Kanban - Multi-Account</title>
+    <!-- Microsoft Authentication Library -->
+    <script src="https://alcdn.msauth.net/browser/2.38.0/js/msal-browser.min.js"></script>
+    <!-- Google Identity Services -->
+    <script src="https://accounts.google.com/gsi/client" async defer></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+            background: #f5f7fa;
+            min-height: 100vh;
+        }
+
+        /* Header */
+        header {
+            background: #1a1a2e;
+            color: white;
+            padding: 1rem 2rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+        }
+
+        header h1 {
+            font-size: 1.5rem;
+            font-weight: 500;
+            cursor: pointer;
+        }
+
+        .header-actions {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+
+        button {
+            background: white;
+            color: #1a1a2e;
+            border: none;
+            padding: 0.5rem 1rem;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 0.85rem;
+            font-weight: 500;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        button:hover {
+            background: #f0f0f0;
+            transform: translateY(-1px);
+        }
+
+        button.primary {
+            background: #4CAF50;
+            color: white;
+        }
+
+        button.primary:hover {
+            background: #45a049;
+        }
+
+        button.danger {
+            background: #f44336;
+            color: white;
+        }
+
+        button.danger:hover {
+            background: #da190b;
+        }
+
+        button.secondary {
+            background: transparent;
+            color: white;
+            border: 1px solid rgba(255,255,255,0.3);
+        }
+
+        button.secondary:hover {
+            background: rgba(255,255,255,0.1);
+        }
+
+        /* Navigation breadcrumb */
+        .breadcrumb {
+            padding: 1rem 2rem;
+            background: #fff;
+            border-bottom: 1px solid #e0e0e0;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .breadcrumb a {
+            color: #0078d4;
+            text-decoration: none;
+            cursor: pointer;
+        }
+
+        .breadcrumb a:hover {
+            text-decoration: underline;
+        }
+
+        .breadcrumb span {
+            color: #666;
+        }
+
+        /* Main container */
+        .kanban-container {
+            padding: 1.5rem;
+            overflow-x: auto;
+        }
+
+        .kanban-board {
+            display: flex;
+            gap: 1rem;
+            min-width: max-content;
+        }
+
+        /* Kanban columns */
+        .kanban-column {
+            background: #ebecf0;
+            border-radius: 8px;
+            width: 300px;
+            min-width: 300px;
+            max-height: calc(100vh - 180px);
+            display: flex;
+            flex-direction: column;
+        }
+
+        .column-header {
+            padding: 0.75rem 1rem;
+            font-weight: 600;
+            color: white;
+            border-radius: 8px 8px 0 0;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            cursor: pointer;
+            transition: filter 0.2s;
+        }
+
+        .column-header:hover {
+            filter: brightness(1.1);
+        }
+
+        .column-header .account-name {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .column-header .provider-icon {
+            font-size: 1.1rem;
+        }
+
+        .column-header .count {
+            background: rgba(255,255,255,0.3);
+            padding: 0.2rem 0.6rem;
+            border-radius: 10px;
+            font-size: 0.8rem;
+            font-weight: normal;
+        }
+
+        .column-header-actions {
+            display: flex;
+            gap: 0.25rem;
+        }
+
+        .column-header-actions button {
+            padding: 0.25rem 0.5rem;
+            font-size: 0.75rem;
+            background: rgba(255,255,255,0.2);
+            color: white;
+            border-radius: 3px;
+        }
+
+        .column-header-actions button:hover {
+            background: rgba(255,255,255,0.3);
+        }
+
+        /* Day column header (weekly view) */
+        .day-column .column-header {
+            cursor: default;
+        }
+
+        .day-column .column-header:hover {
+            filter: none;
+        }
+
+        .today {
+            background: #e3f2fd;
+        }
+
+        .today .column-header {
+            box-shadow: 0 0 0 3px rgba(255,255,255,0.5);
+            font-weight: 700;
+        }
+
+        .today .column-header::after {
+            content: ' • Today';
+            font-size: 0.75rem;
+            opacity: 0.9;
+        }
+
+        .column-cards {
+            padding: 0.5rem;
+            overflow-y: auto;
+            flex: 1;
+        }
+
+        /* Email cards */
+        .email-card {
+            background: white;
+            border-radius: 6px;
+            padding: 0.75rem;
+            margin-bottom: 0.5rem;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            transition: all 0.2s;
+            border-left: 3px solid transparent;
+            position: relative;
+        }
+
+        .email-card:hover {
+            box-shadow: 0 3px 8px rgba(0,0,0,0.15);
+            transform: translateY(-1px);
+        }
+
+        .email-card .email-content {
+            cursor: pointer;
+        }
+
+        .email-card .email-actions {
+            display: none;
+            position: absolute;
+            top: 0.5rem;
+            right: 0.5rem;
+            gap: 0.25rem;
+        }
+
+        .email-card:hover .email-actions {
+            display: flex;
+        }
+
+        .email-card .email-actions button {
+            padding: 0.25rem 0.5rem;
+            font-size: 0.75rem;
+            background: #f0f0f0;
+            border-radius: 3px;
+            opacity: 0.8;
+        }
+
+        .email-card .email-actions button:hover {
+            opacity: 1;
+            background: #e0e0e0;
+        }
+
+        .email-card .email-actions button.starred {
+            background: #fff3cd;
+            color: #856404;
+        }
+
+        .email-card.archived {
+            opacity: 0.5;
+            text-decoration: line-through;
+        }
+
+        .email-sender {
+            font-weight: 600;
+            color: #172b4d;
+            font-size: 0.9rem;
+            margin-bottom: 0.25rem;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .email-subject {
+            color: #5e6c84;
+            font-size: 0.85rem;
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+        }
+
+        .email-time {
+            color: #8993a4;
+            font-size: 0.75rem;
+            margin-top: 0.5rem;
+        }
+
+        /* Loading state */
+        .loading {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            height: calc(100vh - 180px);
+            color: #666;
+        }
+
+        .spinner {
+            width: 40px;
+            height: 40px;
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #0078d4;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-right: 1rem;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        /* Empty/Welcome state */
+        .welcome-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: calc(100vh - 120px);
+            gap: 1.5rem;
+            text-align: center;
+            padding: 2rem;
+        }
+
+        .welcome-container h2 {
+            color: #333;
+            font-weight: 500;
+        }
+
+        .welcome-container p {
+            color: #666;
+            max-width: 400px;
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 2rem;
+            color: #8993a4;
+        }
+
+        .error-message {
+            background: #fde7e9;
+            color: #a4262c;
+            padding: 1rem;
+            border-radius: 6px;
+            margin: 1rem;
+            text-align: center;
+        }
+
+        /* Modal */
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0,0,0,0.5);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+        }
+
+        .modal {
+            background: white;
+            border-radius: 12px;
+            padding: 1.5rem;
+            width: 90%;
+            max-width: 500px;
+            max-height: 80vh;
+            overflow-y: auto;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+        }
+
+        .modal h2 {
+            margin-bottom: 1rem;
+            color: #333;
+        }
+
+        .modal-actions {
+            display: flex;
+            justify-content: flex-end;
+            gap: 0.5rem;
+            margin-top: 1.5rem;
+        }
+
+        /* Form elements */
+        .form-group {
+            margin-bottom: 1rem;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 0.5rem;
+            font-weight: 500;
+            color: #333;
+        }
+
+        .form-group input, .form-group select {
+            width: 100%;
+            padding: 0.75rem;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            font-size: 1rem;
+        }
+
+        .form-group input:focus, .form-group select:focus {
+            outline: none;
+            border-color: #0078d4;
+            box-shadow: 0 0 0 3px rgba(0,120,212,0.1);
+        }
+
+        /* Color picker */
+        .color-picker {
+            display: flex;
+            gap: 0.5rem;
+            flex-wrap: wrap;
+        }
+
+        .color-option {
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            cursor: pointer;
+            border: 3px solid transparent;
+            transition: all 0.2s;
+        }
+
+        .color-option:hover {
+            transform: scale(1.1);
+        }
+
+        .color-option.selected {
+            border-color: #333;
+            box-shadow: 0 0 0 2px white, 0 0 0 4px #333;
+        }
+
+        /* Provider buttons */
+        .provider-buttons {
+            display: flex;
+            flex-direction: column;
+            gap: 0.75rem;
+        }
+
+        .provider-btn {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            padding: 1rem;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            background: white;
+            cursor: pointer;
+            transition: all 0.2s;
+            width: 100%;
+            text-align: left;
+        }
+
+        .provider-btn:hover {
+            border-color: #0078d4;
+            background: #f8f9fa;
+        }
+
+        .provider-btn .icon {
+            font-size: 1.5rem;
+        }
+
+        .provider-btn .info {
+            flex: 1;
+        }
+
+        .provider-btn .info strong {
+            display: block;
+            color: #333;
+        }
+
+        .provider-btn .info span {
+            font-size: 0.85rem;
+            color: #666;
+        }
+
+        /* Account list in settings */
+        .account-list {
+            margin-top: 1rem;
+        }
+
+        .account-item {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            padding: 0.75rem;
+            border: 1px solid #eee;
+            border-radius: 8px;
+            margin-bottom: 0.5rem;
+        }
+
+        .account-item .drag-handle {
+            cursor: grab;
+            color: #999;
+            font-size: 1.2rem;
+            padding: 0 0.25rem;
+        }
+
+        .account-item .drag-handle:hover {
+            color: #666;
+        }
+
+        .account-item .color-dot {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+        }
+
+        .account-item .info {
+            flex: 1;
+        }
+
+        .account-item .info strong {
+            display: block;
+            color: #333;
+        }
+
+        .account-item .info span {
+            font-size: 0.85rem;
+            color: #666;
+        }
+
+        .account-item .order-buttons {
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+        }
+
+        .account-item .order-buttons button {
+            padding: 0.15rem 0.4rem;
+            font-size: 0.7rem;
+            line-height: 1;
+        }
+
+        /* Draggable columns */
+        .kanban-column.dragging {
+            opacity: 0.5;
+        }
+
+        .kanban-column.drag-over {
+            border: 2px dashed #0078d4;
+        }
+
+        .hidden {
+            display: none !important;
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <h1 onclick="goHome()">Email Kanban</h1>
+        <div class="header-actions">
+            <button class="primary" onclick="showAddAccountModal()">+ Add Account</button>
+            <button class="secondary" onclick="showSettingsModal()">Settings</button>
+        </div>
+    </header>
+
+    <div id="breadcrumb" class="breadcrumb hidden">
+        <a onclick="goHome()">Home</a>
+        <span>/</span>
+        <span id="breadcrumbAccount"></span>
+    </div>
+
+    <main>
+        <div id="welcomeState" class="welcome-container hidden">
+            <h2>Welcome to Email Kanban</h2>
+            <p>Add your email accounts to see your inbox organized by day in a beautiful Kanban board.</p>
+            <button class="primary" onclick="showAddAccountModal()">+ Add Your First Account</button>
+        </div>
+
+        <div id="loadingState" class="loading hidden">
+            <div class="spinner"></div>
+            <span>Loading emails...</span>
+        </div>
+
+        <div id="errorState" class="error-message hidden"></div>
+
+        <div id="kanbanView" class="kanban-container hidden">
+            <div class="kanban-board" id="kanbanBoard"></div>
+        </div>
+    </main>
+
+    <!-- Add Account Modal -->
+    <div id="addAccountModal" class="modal-overlay hidden" onclick="closeModal(event)">
+        <div class="modal" onclick="event.stopPropagation()">
+            <h2>Add Email Account</h2>
+            <div class="provider-buttons">
+                <button class="provider-btn" onclick="addAccount('office365')">
+                    <span class="icon">📧</span>
+                    <div class="info">
+                        <strong>Microsoft Office 365</strong>
+                        <span>Outlook, Hotmail, Work/School accounts</span>
+                    </div>
+                </button>
+                <button class="provider-btn" onclick="addAccount('office365-shared')">
+                    <span class="icon">📬</span>
+                    <div class="info">
+                        <strong>Office 365 Shared Mailbox</strong>
+                        <span>Access a shared mailbox from your organization</span>
+                    </div>
+                </button>
+                <button class="provider-btn" onclick="addAccount('gmail')">
+                    <span class="icon">📩</span>
+                    <div class="info">
+                        <strong>Gmail / Google Workspace</strong>
+                        <span>Personal or work Google accounts</span>
+                    </div>
+                </button>
+                <button class="provider-btn" onclick="addAccount('yahoo')">
+                    <span class="icon">📨</span>
+                    <div class="info">
+                        <strong>Yahoo Mail</strong>
+                        <span>Yahoo personal accounts</span>
+                    </div>
+                </button>
+                <button class="provider-btn" onclick="addAccount('ticktick')">
+                    <span class="icon">✅</span>
+                    <div class="info">
+                        <strong>TickTick Tasks</strong>
+                        <span>Task management from TickTick</span>
+                    </div>
+                </button>
+            </div>
+            <div class="modal-actions">
+                <button onclick="closeAllModals()">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Account Setup Modal -->
+    <div id="accountSetupModal" class="modal-overlay hidden" onclick="closeModal(event)">
+        <div class="modal" onclick="event.stopPropagation()">
+            <h2 id="setupModalTitle">Setup Account</h2>
+            <form id="accountSetupForm" onsubmit="return saveAccountSetup(event)">
+                <div class="form-group">
+                    <label for="accountName">Display Name</label>
+                    <input type="text" id="accountName" required placeholder="e.g., Work Email, Personal">
+                </div>
+                <div class="form-group hidden" id="sharedMailboxGroup">
+                    <label for="sharedMailbox">Shared Mailbox Email</label>
+                    <input type="email" id="sharedMailbox" placeholder="shared@company.com">
+                </div>
+                <div class="form-group hidden" id="gmailAccountNumGroup">
+                    <label for="gmailAccountNumber">Gmail Account Number</label>
+                    <input type="number" id="gmailAccountNumber" min="0" max="10" value="0" placeholder="0">
+                    <p style="font-size: 0.75rem; color: #666; margin-top: 0.5rem;">
+                        The number after /u/ in your Gmail URL (e.g., 0, 1, 2). Check your Gmail URL to find the correct number for this account.
+                    </p>
+                </div>
+                <div class="form-group hidden" id="ticktickCredsGroup">
+                    <label for="ticktickClientId">Client ID</label>
+                    <input type="text" id="ticktickClientId" placeholder="Your TickTick Client ID">
+                    <label for="ticktickClientSecret" style="margin-top: 0.75rem; display: block;">Client Secret</label>
+                    <input type="password" id="ticktickClientSecret" placeholder="Your TickTick Client Secret">
+                    <p style="font-size: 0.75rem; color: #666; margin-top: 0.5rem;">
+                        Get these from <a href="https://developer.ticktick.com/manage" target="_blank">developer.ticktick.com/manage</a>.
+                        Create an app, set redirect URI to <code>http://localhost:8000/index.html</code>
+                    </p>
+                </div>
+                <div class="form-group">
+                    <label>Color</label>
+                    <div class="color-picker" id="colorPicker"></div>
+                </div>
+                <input type="hidden" id="setupProvider">
+                <input type="hidden" id="setupAccountId">
+                <div class="modal-actions">
+                    <button type="button" onclick="closeAllModals()">Cancel</button>
+                    <button type="submit" class="primary">Connect Account</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Settings Modal -->
+    <div id="settingsModal" class="modal-overlay hidden" onclick="closeModal(event)">
+        <div class="modal" onclick="event.stopPropagation()">
+            <h2>Settings</h2>
+            <h3 style="margin-bottom: 0.5rem; color: #666; font-size: 0.9rem;">Connected Accounts</h3>
+            <div class="account-list" id="accountList"></div>
+
+            <h3 style="margin-top: 1.5rem; margin-bottom: 0.5rem; color: #666; font-size: 0.9rem;">Backup & Restore</h3>
+            <div style="display: flex; gap: 0.5rem;">
+                <button onclick="exportConfig()" style="flex: 1;">Export Config</button>
+                <button onclick="document.getElementById('importFile').click()" style="flex: 1;">Import Config</button>
+                <input type="file" id="importFile" accept=".json" style="display: none;" onchange="importConfig(event)">
+            </div>
+            <p style="font-size: 0.75rem; color: #999; margin-top: 0.5rem;">Export saves account settings. Import will replace all current accounts.</p>
+
+            <div class="modal-actions">
+                <button onclick="closeAllModals()">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Color Picker Modal -->
+    <div id="colorPickerModal" class="modal-overlay hidden" onclick="closeModal(event)">
+        <div class="modal" onclick="event.stopPropagation()">
+            <h2>Change Color</h2>
+            <div class="color-picker" id="editColorPicker"></div>
+            <input type="hidden" id="editAccountId">
+            <div class="modal-actions">
+                <button onclick="closeAllModals()">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // ============================================================
+        // CONFIGURATION
+        // ============================================================
+        const CONFIG = {
+            microsoft: {
+                clientId: 'f3fb795c-20f1-45ff-93e1-affb189b3c63',
+                authority: 'https://login.microsoftonline.com/organizations',
+                redirectUri: 'http://localhost:8000/index.html',
+                scopes: ['Mail.Read', 'Mail.ReadWrite', 'Mail.Read.Shared', 'Mail.ReadWrite.Shared']
+            },
+            google: {
+                clientId: '137087085876-qh4t8nia5ussmrftkvrk71btsdhffqn7.apps.googleusercontent.com',
+                scopes: 'https://www.googleapis.com/auth/gmail.modify'
+            },
+            yahoo: {
+                clientId: 'YOUR_YAHOO_CLIENT_ID_HERE'
+            },
+            ticktick: {
+                clientId: '', // Set your Client ID here or enter in account setup
+                clientSecret: '', // Set your Client Secret here or enter in account setup
+                redirectUri: 'http://localhost:8000/index.html',
+                authUrl: 'https://ticktick.com/oauth/authorize',
+                tokenUrl: 'https://ticktick.com/oauth/token',
+                apiBase: 'https://api.ticktick.com/open/v1',
+                scopes: 'tasks:read tasks:write'
+            }
+        };
+
+        const COLORS = [
+            '#0078d4', // Microsoft Blue
+            '#4285f4', // Google Blue
+            '#6001d2', // Yahoo Purple
+            '#00a86b', // Green
+            '#ff6b35', // Orange
+            '#e91e63', // Pink
+            '#9c27b0', // Purple
+            '#00bcd4', // Cyan
+            '#795548', // Brown
+            '#607d8b'  // Gray
+        ];
+
+        const PROVIDER_ICONS = {
+            'office365': '📧',
+            'office365-shared': '📬',
+            'gmail': '📩',
+            'yahoo': '📨',
+            'ticktick': '✅'
+        };
+
+        const PROVIDER_NAMES = {
+            'office365': 'Office 365',
+            'office365-shared': 'Shared Mailbox',
+            'gmail': 'Gmail',
+            'yahoo': 'Yahoo',
+            'ticktick': 'TickTick Tasks'
+        };
+
+        // ============================================================
+        // STATE
+        // ============================================================
+        let accounts = [];
+        let currentView = 'home'; // 'home' or 'account'
+        let currentAccountId = null;
+        let emailCache = {}; // accountId -> emails array
+        let taskCache = {}; // accountId -> { tasks: [], completedTasks: [] }
+        let msalInstance = null;
+        let googleTokenClient = null;
+
+        // Helper to check if provider is task-based vs email-based
+        function isTaskProvider(provider) {
+            return provider === 'ticktick';
+        }
+
+        // ============================================================
+        // INITIALIZATION
+        // ============================================================
+        async function initialize() {
+            // Load accounts from localStorage
+            const savedAccounts = localStorage.getItem('emailKanban_accounts');
+            if (savedAccounts) {
+                accounts = JSON.parse(savedAccounts);
+            }
+
+            // Initialize MSAL
+            msalInstance = new msal.PublicClientApplication({
+                auth: {
+                    clientId: CONFIG.microsoft.clientId,
+                    authority: CONFIG.microsoft.authority,
+                    redirectUri: CONFIG.microsoft.redirectUri,
+                },
+                cache: {
+                    cacheLocation: 'localStorage',
+                    storeAuthStateInCookie: false,
+                }
+            });
+
+            try {
+                await msalInstance.handleRedirectPromise();
+            } catch (error) {
+                console.error('MSAL redirect error:', error);
+            }
+
+            // Initialize Google
+            if (CONFIG.google.clientId !== 'YOUR_GOOGLE_CLIENT_ID_HERE') {
+                try {
+                    googleTokenClient = google.accounts.oauth2.initTokenClient({
+                        client_id: CONFIG.google.clientId,
+                        scope: CONFIG.google.scopes,
+                        callback: () => {}
+                    });
+                } catch (e) {
+                    console.log('Google client not available');
+                }
+            }
+
+            // Check for TickTick OAuth callback
+            const isTickTickCallback = await handleTickTickCallback();
+            if (isTickTickCallback) {
+                return; // Callback handled, view already loaded
+            }
+
+            // Render initial view
+            if (accounts.length === 0) {
+                showWelcome();
+            } else {
+                await loadHomeView();
+            }
+        }
+
+        // ============================================================
+        // DATE HELPERS (Paris Timezone)
+        // ============================================================
+        const dayNames = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+
+        function getStartOfWeekParis() {
+            const now = new Date();
+            const parisStr = now.toLocaleString('en-US', { timeZone: 'Europe/Paris' });
+            const parisNow = new Date(parisStr);
+            const day = parisNow.getDay();
+            const diff = day === 0 ? -6 : 1 - day;
+            const monday = new Date(parisNow);
+            monday.setDate(parisNow.getDate() + diff);
+            monday.setHours(0, 0, 0, 0);
+            return monday;
+        }
+
+        function getStartOfTodayParis() {
+            const now = new Date();
+            const parisStr = now.toLocaleString('en-US', { timeZone: 'Europe/Paris' });
+            const parisNow = new Date(parisStr);
+            parisNow.setHours(0, 0, 0, 0);
+            return parisNow;
+        }
+
+        function toUTCForParisMidnight(parisDate) {
+            const year = parisDate.getFullYear();
+            const month = parisDate.getMonth();
+            const day = parisDate.getDate();
+            const utcDate = new Date(Date.UTC(year, month, day - 1, 23, 0, 0));
+            return utcDate.toISOString();
+        }
+
+        function getDayIndex(date) {
+            const parisDate = new Date(date.toLocaleString('en-US', { timeZone: 'Europe/Paris' }));
+            const day = parisDate.getDay();
+            return day === 0 ? 6 : day - 1;
+        }
+
+        function formatTime(date) {
+            return date.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Paris' });
+        }
+
+        function isToday(date) {
+            const today = new Date();
+            const todayParis = new Date(today.toLocaleString('en-US', { timeZone: 'Europe/Paris' }));
+            const dateParis = new Date(date.toLocaleString('en-US', { timeZone: 'Europe/Paris' }));
+            return dateParis.getDate() === todayParis.getDate() &&
+                   dateParis.getMonth() === todayParis.getMonth() &&
+                   dateParis.getFullYear() === todayParis.getFullYear();
+        }
+
+        function isTodayEmail(emailDate) {
+            return isToday(new Date(emailDate));
+        }
+
+        // ============================================================
+        // ACCOUNT MANAGEMENT
+        // ============================================================
+        function saveAccounts() {
+            localStorage.setItem('emailKanban_accounts', JSON.stringify(accounts));
+        }
+
+        function generateId() {
+            return 'acc_' + Math.random().toString(36).substr(2, 9);
+        }
+
+        function getAccount(accountId) {
+            return accounts.find(a => a.id === accountId);
+        }
+
+        // ============================================================
+        // AUTHENTICATION PROVIDERS
+        // ============================================================
+        async function authenticateMicrosoft(account) {
+            const msalAccounts = msalInstance.getAllAccounts();
+            let msalAccount = msalAccounts.find(a => a.username === account.email);
+
+            if (!msalAccount) {
+                // Need to login
+                try {
+                    const response = await msalInstance.loginPopup({
+                        scopes: CONFIG.microsoft.scopes
+                    });
+                    msalAccount = response.account;
+                    account.email = msalAccount.username;
+                    saveAccounts();
+                } catch (error) {
+                    console.error('Microsoft login error:', error);
+                    throw error;
+                }
+            }
+
+            try {
+                const response = await msalInstance.acquireTokenSilent({
+                    scopes: CONFIG.microsoft.scopes,
+                    account: msalAccount
+                });
+                return response.accessToken;
+            } catch (error) {
+                const response = await msalInstance.acquireTokenPopup({
+                    scopes: CONFIG.microsoft.scopes,
+                    account: msalAccount
+                });
+                return response.accessToken;
+            }
+        }
+
+        // Wait for Google library to load
+        async function waitForGoogleLibrary(maxWaitMs = 5000) {
+            const startTime = Date.now();
+            while (Date.now() - startTime < maxWaitMs) {
+                if (typeof google !== 'undefined' && google.accounts && google.accounts.oauth2) {
+                    return true;
+                }
+                await new Promise(r => setTimeout(r, 100));
+            }
+            return false;
+        }
+
+        async function initGoogleClient() {
+            if (googleTokenClient) return true;
+
+            const libraryReady = await waitForGoogleLibrary();
+            if (!libraryReady) {
+                console.error('Google library failed to load');
+                return false;
+            }
+
+            try {
+                googleTokenClient = google.accounts.oauth2.initTokenClient({
+                    client_id: CONFIG.google.clientId,
+                    scope: CONFIG.google.scopes,
+                    callback: () => {}
+                });
+                return true;
+            } catch (e) {
+                console.error('Failed to initialize Google client:', e);
+                return false;
+            }
+        }
+
+        async function authenticateGoogle(account) {
+            // Wait for and initialize Google client
+            const initialized = await initGoogleClient();
+            if (!initialized) {
+                throw new Error('Google client failed to load. Please check your internet connection and refresh.');
+            }
+
+            return new Promise((resolve, reject) => {
+                googleTokenClient.callback = (response) => {
+                    if (response.error) {
+                        reject(new Error(response.error_description || response.error));
+                    } else {
+                        // Store token
+                        account.googleToken = response.access_token;
+                        saveAccounts();
+                        resolve(response.access_token);
+                    }
+                };
+
+                if (account.googleToken) {
+                    // Verify token is still valid by making a test request
+                    fetch('https://gmail.googleapis.com/gmail/v1/users/me/profile', {
+                        headers: { 'Authorization': `Bearer ${account.googleToken}` }
+                    }).then(response => {
+                        if (response.ok) {
+                            resolve(account.googleToken);
+                        } else {
+                            // Token expired, get new one
+                            account.googleToken = null;
+                            googleTokenClient.requestAccessToken({ prompt: '' });
+                        }
+                    }).catch(() => {
+                        account.googleToken = null;
+                        googleTokenClient.requestAccessToken({ prompt: '' });
+                    });
+                } else {
+                    googleTokenClient.requestAccessToken({ prompt: 'consent' });
+                }
+            });
+        }
+
+        async function authenticateYahoo(account) {
+            // Yahoo OAuth requires a backend due to CORS
+            throw new Error('Yahoo Mail requires server-side authentication. Please configure a backend proxy.');
+        }
+
+        async function authenticateTickTick(account) {
+            // Check if we have credentials
+            if (!account.ticktickClientId || !account.ticktickClientSecret) {
+                throw new Error('TickTick credentials not configured. Please add your Client ID and Secret in Settings.');
+            }
+
+            // If no token, need to authorize
+            if (!account.ticktickToken) {
+                throw new Error('TickTick not authorized. Click to authorize with TickTick.');
+            }
+
+            // Verify token is still valid by making a test request
+            try {
+                const response = await fetch(`${CONFIG.ticktick.apiBase}/project`, {
+                    headers: { 'Authorization': `Bearer ${account.ticktickToken}` }
+                });
+
+                if (response.ok) {
+                    return account.ticktickToken;
+                } else if (response.status === 401) {
+                    // Token expired, try to refresh
+                    if (account.ticktickRefreshToken) {
+                        try {
+                            await refreshTickTickToken(account);
+                            return account.ticktickToken;
+                        } catch (e) {
+                            console.error('Token refresh failed:', e);
+                        }
+                    }
+                    throw new Error('TickTick access token expired. Please re-authorize in Settings.');
+                } else {
+                    throw new Error(`TickTick API error: ${response.status}`);
+                }
+            } catch (error) {
+                if (error.message.includes('TickTick')) throw error;
+                throw new Error('Failed to connect to TickTick. Please check your internet connection.');
+            }
+        }
+
+        // TickTick OAuth popup flow
+        async function startTickTickOAuth(account) {
+            const clientId = account.ticktickClientId;
+            const redirectUri = CONFIG.ticktick.redirectUri;
+            const scope = CONFIG.ticktick.scopes;
+            const state = account.id; // Use account ID as state to identify on callback
+
+            // Store pending OAuth state
+            localStorage.setItem('ticktick_oauth_state', state);
+
+            const authUrl = `${CONFIG.ticktick.authUrl}?` +
+                `client_id=${encodeURIComponent(clientId)}` +
+                `&redirect_uri=${encodeURIComponent(redirectUri)}` +
+                `&response_type=code` +
+                `&scope=${encodeURIComponent(scope)}` +
+                `&state=${encodeURIComponent(state)}`;
+
+            // Open popup for authorization
+            const popup = window.open(authUrl, 'ticktick_auth', 'width=600,height=700,left=200,top=100');
+
+            if (!popup) {
+                alert('Please allow popups for this site to authorize TickTick');
+                return;
+            }
+
+            // The callback will be handled by handleTickTickCallback on page load
+            // Show message to user
+            showLoading();
+            document.getElementById('loadingState').innerHTML = `
+                <div class="spinner"></div>
+                <p>Authorizing with TickTick...</p>
+                <p style="font-size: 0.8rem; color: #666;">Complete authorization in the popup window</p>
+            `;
+        }
+
+        // Handle OAuth callback (called from initialize if code is in URL)
+        async function handleTickTickCallback() {
+            const urlParams = new URLSearchParams(window.location.search);
+            const code = urlParams.get('code');
+            const state = urlParams.get('state');
+            const error = urlParams.get('error');
+
+            if (!code && !error) return false; // Not a callback
+
+            // Clean up URL
+            window.history.replaceState({}, document.title, window.location.pathname);
+
+            if (error) {
+                alert(`TickTick authorization failed: ${error}`);
+                return true;
+            }
+
+            const savedState = localStorage.getItem('ticktick_oauth_state');
+            if (state !== savedState) {
+                console.error('OAuth state mismatch');
+                alert('Authorization failed: state mismatch. Please try again.');
+                return true;
+            }
+
+            localStorage.removeItem('ticktick_oauth_state');
+
+            // Find the account
+            const account = getAccount(state);
+            if (!account) {
+                alert('Authorization failed: account not found. Please try again.');
+                return true;
+            }
+
+            // Exchange code for token
+            try {
+                showLoading();
+                await exchangeTickTickCode(account, code);
+                saveAccounts();
+                alert('TickTick connected successfully!');
+                await loadHomeView();
+            } catch (err) {
+                console.error('Token exchange failed:', err);
+                alert('Failed to complete TickTick authorization: ' + err.message);
+                await loadHomeView();
+            }
+
+            return true;
+        }
+
+        // Exchange authorization code for tokens
+        async function exchangeTickTickCode(account, code) {
+            const response = await fetch(CONFIG.ticktick.tokenUrl, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded'
+                },
+                body: new URLSearchParams({
+                    client_id: account.ticktickClientId,
+                    client_secret: account.ticktickClientSecret,
+                    code: code,
+                    grant_type: 'authorization_code',
+                    redirect_uri: CONFIG.ticktick.redirectUri
+                })
+            });
+
+            if (!response.ok) {
+                const errorText = await response.text();
+                console.error('Token exchange error:', errorText);
+                throw new Error(`Token exchange failed: ${response.status}`);
+            }
+
+            const data = await response.json();
+            account.ticktickToken = data.access_token;
+            account.ticktickRefreshToken = data.refresh_token;
+            account.ticktickTokenExpiry = Date.now() + (data.expires_in * 1000);
+        }
+
+        // Refresh expired token
+        async function refreshTickTickToken(account) {
+            const response = await fetch(CONFIG.ticktick.tokenUrl, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded'
+                },
+                body: new URLSearchParams({
+                    client_id: account.ticktickClientId,
+                    client_secret: account.ticktickClientSecret,
+                    refresh_token: account.ticktickRefreshToken,
+                    grant_type: 'refresh_token'
+                })
+            });
+
+            if (!response.ok) {
+                throw new Error('Token refresh failed');
+            }
+
+            const data = await response.json();
+            account.ticktickToken = data.access_token;
+            if (data.refresh_token) {
+                account.ticktickRefreshToken = data.refresh_token;
+            }
+            account.ticktickTokenExpiry = Date.now() + (data.expires_in * 1000);
+            saveAccounts();
+        }
+
+        // ============================================================
+        // EMAIL FETCHING
+        // ============================================================
+        async function fetchMicrosoftEmails(account, startDate) {
+            const accessToken = await authenticateMicrosoft(account);
+            const startDateISO = toUTCForParisMidnight(startDate);
+
+            let endpoint;
+            if (account.provider === 'office365-shared' && account.sharedMailbox) {
+                endpoint = `https://graph.microsoft.com/v1.0/users/${account.sharedMailbox}/mailFolders/inbox/messages`;
+            } else {
+                endpoint = `https://graph.microsoft.com/v1.0/me/mailFolders/inbox/messages`;
+            }
+
+            let allEmails = [];
+            let nextUrl = `${endpoint}?$filter=receivedDateTime ge ${startDateISO}&$select=id,subject,from,receivedDateTime,webLink,flag&$orderby=receivedDateTime desc&$top=200`;
+
+            while (nextUrl) {
+                const response = await fetch(nextUrl, {
+                    headers: {
+                        'Authorization': `Bearer ${accessToken}`,
+                        'Content-Type': 'application/json'
+                    }
+                });
+
+                if (!response.ok) {
+                    throw new Error(`Microsoft API error: ${response.status}`);
+                }
+
+                const data = await response.json();
+                allEmails = allEmails.concat(data.value || []);
+                nextUrl = data['@odata.nextLink'] || null;
+            }
+
+            return allEmails.map(email => ({
+                id: email.id,
+                subject: email.subject || '(No subject)',
+                sender: email.from?.emailAddress?.name || email.from?.emailAddress?.address || 'Unknown',
+                receivedDateTime: email.receivedDateTime,
+                webLink: email.webLink,
+                provider: account.provider,
+                isFlagged: email.flag?.flagStatus === 'flagged'
+            }));
+        }
+
+        async function fetchGmailEmails(account, startDate) {
+            const accessToken = await authenticateGoogle(account);
+            const startTimestamp = Math.floor(startDate.getTime() / 1000);
+
+            // Get all message IDs with pagination
+            let allMessageIds = [];
+            let nextPageToken = null;
+
+            do {
+                const url = `https://gmail.googleapis.com/gmail/v1/users/me/messages?q=in:inbox after:${startTimestamp}&maxResults=100${nextPageToken ? '&pageToken=' + nextPageToken : ''}`;
+                const listResponse = await fetch(url, {
+                    headers: { 'Authorization': `Bearer ${accessToken}` }
+                });
+
+                if (!listResponse.ok) {
+                    if (listResponse.status === 429) {
+                        await new Promise(r => setTimeout(r, 2000));
+                        continue;
+                    }
+                    throw new Error(`Gmail API error: ${listResponse.status}`);
+                }
+
+                const listData = await listResponse.json();
+                const messages = listData.messages || [];
+                allMessageIds = allMessageIds.concat(messages);
+                nextPageToken = listData.nextPageToken || null;
+            } while (nextPageToken);
+
+            // Fetch message details in smaller batches with delays
+            const batchSize = 10;
+            const emails = [];
+
+            for (let i = 0; i < allMessageIds.length; i += batchSize) {
+                const batch = allMessageIds.slice(i, i + batchSize);
+                const batchEmails = await Promise.all(batch.map(async (msg) => {
+                    try {
+                        const response = await fetch(
+                            `https://gmail.googleapis.com/gmail/v1/users/me/messages/${msg.id}?format=metadata&metadataHeaders=Subject&metadataHeaders=From&metadataHeaders=Date`,
+                            {
+                                headers: { 'Authorization': `Bearer ${accessToken}` }
+                            }
+                        );
+
+                        if (!response.ok) {
+                            return null;
+                        }
+
+                        const data = await response.json();
+
+                        const headers = data.payload?.headers || [];
+                        const getHeader = (name) => headers.find(h => h.name === name)?.value || '';
+
+                        const fromHeader = getHeader('From');
+                        const senderMatch = fromHeader.match(/^([^<]+)/);
+                        const sender = senderMatch ? senderMatch[1].trim().replace(/"/g, '') : fromHeader;
+
+                        // Handle invalid dates
+                        let receivedDateTime;
+                        try {
+                            const timestamp = parseInt(data.internalDate);
+                            if (isNaN(timestamp)) throw new Error('Invalid timestamp');
+                            receivedDateTime = new Date(timestamp).toISOString();
+                        } catch (e) {
+                            receivedDateTime = new Date().toISOString(); // fallback to now
+                        }
+
+                        // Check if starred
+                        const isStarred = data.labelIds?.includes('STARRED') || false;
+
+                        const gmailAccountNum = account.gmailAccountNumber || 0;
+                        return {
+                            id: msg.id,
+                            subject: getHeader('Subject') || '(No subject)',
+                            sender: sender || 'Unknown',
+                            receivedDateTime: receivedDateTime,
+                            webLink: `https://mail.google.com/mail/u/${gmailAccountNum}/#inbox/${msg.id}`,
+                            provider: 'gmail',
+                            isStarred: isStarred
+                        };
+                    } catch (e) {
+                        return null;
+                    }
+                }));
+
+                // Filter out failed fetches
+                emails.push(...batchEmails.filter(e => e !== null));
+
+                // Small delay between batches to avoid rate limiting
+                if (i + batchSize < allMessageIds.length) {
+                    await new Promise(r => setTimeout(r, 100));
+                }
+            }
+
+            return emails.sort((a, b) => new Date(b.receivedDateTime) - new Date(a.receivedDateTime));
+        }
+
+        async function fetchYahooEmails(account, startDate) {
+            throw new Error('Yahoo Mail requires server-side authentication.');
+        }
+
+        async function fetchEmailsForAccount(account, startDate) {
+            switch (account.provider) {
+                case 'office365':
+                case 'office365-shared':
+                    return await fetchMicrosoftEmails(account, startDate);
+                case 'gmail':
+                    return await fetchGmailEmails(account, startDate);
+                case 'yahoo':
+                    return await fetchYahooEmails(account, startDate);
+                default:
+                    throw new Error(`Unknown provider: ${account.provider}`);
+            }
+        }
+
+        // ============================================================
+        // TASK FETCHING (TickTick)
+        // ============================================================
+        async function fetchTickTickTasks(account, startDate) {
+            const accessToken = await authenticateTickTick(account);
+
+            // First, get all projects
+            const projectsResponse = await fetch(`${CONFIG.ticktick.apiBase}/project`, {
+                headers: { 'Authorization': `Bearer ${accessToken}` }
+            });
+
+            if (!projectsResponse.ok) {
+                throw new Error(`TickTick API error fetching projects: ${projectsResponse.status}`);
+            }
+
+            const projects = await projectsResponse.json();
+            console.log(`TickTick: found ${projects.length} projects:`, projects.map(p => ({ id: p.id, name: p.name })));
+
+            // Build a map of project ID to project name
+            const projectNames = {};
+            projects.forEach(p => {
+                projectNames[p.id] = p.name;
+            });
+
+            // Fetch tasks from each project using /project/{id}/data endpoint
+            let allTasks = [];
+            for (const project of projects) {
+                try {
+                    const projectDataResponse = await fetch(
+                        `${CONFIG.ticktick.apiBase}/project/${project.id}/data`,
+                        {
+                            headers: { 'Authorization': `Bearer ${accessToken}` }
+                        }
+                    );
+
+                    if (projectDataResponse.ok) {
+                        const projectData = await projectDataResponse.json();
+                        if (projectData.tasks && Array.isArray(projectData.tasks)) {
+                            allTasks.push(...projectData.tasks.map(task => ({
+                                ...task,
+                                projectId: project.id,
+                                projectName: project.name
+                            })));
+                        }
+                    } else {
+                        console.log(`TickTick: Could not fetch tasks for project ${project.name}: ${projectDataResponse.status}`);
+                    }
+                } catch (e) {
+                    console.log(`TickTick: Error fetching project ${project.name}:`, e);
+                }
+            }
+
+            // Also try to fetch inbox tasks (inbox is a special project)
+            // Try common inbox IDs
+            const inboxIds = ['inbox', 'INBOX', 'none'];
+            const hasInboxInProjects = projects.some(p =>
+                p.id === 'inbox' || p.name?.toLowerCase() === 'inbox'
+            );
+
+            if (!hasInboxInProjects) {
+                for (const inboxId of inboxIds) {
+                    try {
+                        const inboxResponse = await fetch(
+                            `${CONFIG.ticktick.apiBase}/project/${inboxId}/data`,
+                            {
+                                headers: { 'Authorization': `Bearer ${accessToken}` }
+                            }
+                        );
+
+                        if (inboxResponse.ok) {
+                            const inboxData = await inboxResponse.json();
+                            if (inboxData.tasks && Array.isArray(inboxData.tasks)) {
+                                console.log(`TickTick: Found ${inboxData.tasks.length} tasks in inbox (${inboxId})`);
+                                allTasks.push(...inboxData.tasks.map(task => ({
+                                    ...task,
+                                    projectId: inboxId,
+                                    projectName: 'Inbox'
+                                })));
+                                break; // Found inbox, no need to try other IDs
+                            }
+                        }
+                    } catch (e) {
+                        // Inbox ID didn't work, try next
+                    }
+                }
+            }
+
+            console.log(`TickTick: fetched ${allTasks.length} total items`);
+
+            // Debug: log all unique 'kind' values and their counts
+            const kindCounts = {};
+            allTasks.forEach(item => {
+                const kind = item.kind || 'undefined';
+                kindCounts[kind] = (kindCounts[kind] || 0) + 1;
+            });
+            console.log('TickTick: Item types by kind:', kindCounts);
+
+            // Filter out notes - only keep actual tasks
+            const tasksOnly = allTasks.filter(item => {
+                // Filter out known note types
+                const kind = (item.kind || '').toUpperCase();
+                if (kind === 'NOTE') return false;
+                // If it has no title, it's probably not a real task
+                if (!item.title) return false;
+                // Only include items that have a due date or start date (scheduled tasks)
+                // Items without any date cannot be shown on a calendar view
+                if (!item.dueDate && !item.startDate) return false;
+                return true;
+            });
+
+            console.log(`TickTick: ${tasksOnly.length} tasks after filtering notes and undated items`);
+
+            // Debug: log a few tasks with all date-related fields
+            if (tasksOnly.length > 0) {
+                console.log('TickTick: Sample tasks:', tasksOnly.slice(0, 5).map(t => ({
+                    title: t.title,
+                    dueDate: t.dueDate,
+                    startDate: t.startDate,
+                    status: t.status,
+                    kind: t.kind
+                })));
+            }
+
+            // Debug: log items that were filtered out (no dates)
+            const undatedItems = allTasks.filter(item => !item.dueDate && !item.startDate && item.title);
+            console.log(`TickTick: ${undatedItems.length} items without dates (filtered out). Sample:`,
+                undatedItems.slice(0, 3).map(t => ({ title: t.title, kind: t.kind })));
+
+            // Transform tasks to common format
+            const transformTask = (task) => {
+                // Parse due date (can be "yyyy-MM-dd" or ISO format)
+                let dueDate = null;
+                if (task.dueDate) {
+                    dueDate = new Date(task.dueDate);
+                } else if (task.startDate) {
+                    dueDate = new Date(task.startDate);
+                }
+
+                // Parse completed time
+                let completedTime = null;
+                if (task.completedTime) {
+                    completedTime = new Date(task.completedTime);
+                }
+
+                // Status: 0 = normal, 2 = completed
+                const isCompleted = task.status === 2;
+
+                const transformed = {
+                    id: task.id,
+                    projectId: task.projectId,
+                    projectName: task.projectName || 'Inbox',
+                    title: task.title || '(No title)',
+                    content: task.content || '',
+                    dueDate: dueDate ? dueDate.toISOString() : null,
+                    completedTime: completedTime ? completedTime.toISOString() : null,
+                    isCompleted: isCompleted,
+                    priority: task.priority || 0,
+                    webLink: `https://ticktick.com/webapp/#p/${task.projectId}/tasks/${task.id}`,
+                    provider: 'ticktick'
+                };
+
+                return transformed;
+            };
+
+            const transformedTasks = tasksOnly.map(transformTask);
+
+            // Debug: show task distribution by date (in Paris timezone)
+            const tasksByDate = {};
+            const todayParis = new Date().toLocaleDateString('en-CA', { timeZone: 'Europe/Paris' });
+            transformedTasks.forEach(t => {
+                if (t.dueDate) {
+                    const dateKey = new Date(t.dueDate).toLocaleDateString('en-CA', { timeZone: 'Europe/Paris' });
+                    tasksByDate[dateKey] = (tasksByDate[dateKey] || 0) + 1;
+                } else {
+                    tasksByDate['no-date'] = (tasksByDate['no-date'] || 0) + 1;
+                }
+            });
+            console.log('TickTick: Tasks by due date (Paris TZ):', tasksByDate);
+            console.log('TickTick: Today in Paris:', todayParis);
+
+            return transformedTasks;
+        }
+
+        // Helper to get date string in YYYY-MM-DD format in Paris timezone
+        function getDateString(date) {
+            const d = new Date(date);
+            return d.toLocaleDateString('en-CA', { timeZone: 'Europe/Paris' }); // en-CA gives YYYY-MM-DD format
+        }
+
+        // Get tasks for a specific day
+        function getTasksForDay(tasks, date, includeCompleted = false) {
+            const targetDateStr = getDateString(date);
+
+            return tasks.filter(task => {
+                if (task.isCompleted) {
+                    if (!includeCompleted) return false;
+                    // For completed tasks, check completedTime
+                    if (task.completedTime) {
+                        const completedDateStr = getDateString(task.completedTime);
+                        return completedDateStr === targetDateStr;
+                    }
+                    return false;
+                } else {
+                    // For uncompleted tasks, check dueDate
+                    if (task.dueDate) {
+                        const dueDateStr = getDateString(task.dueDate);
+                        return dueDateStr === targetDateStr;
+                    }
+                    return false;
+                }
+            });
+        }
+
+        // Get today's tasks (due today or overdue, NOT tasks without due date)
+        function getTodayTasks(tasks) {
+            const todayStr = getDateString(new Date());
+
+            return tasks.filter(task => {
+                // Include uncompleted tasks due today or earlier (overdue)
+                if (!task.isCompleted && task.dueDate) {
+                    const dueDateStr = getDateString(task.dueDate);
+                    return dueDateStr <= todayStr;
+                }
+                // Include tasks completed today
+                if (task.isCompleted && task.completedTime) {
+                    const completedDateStr = getDateString(task.completedTime);
+                    return completedDateStr === todayStr;
+                }
+                // Tasks without due dates are NOT shown (they have no schedule)
+                return false;
+            });
+        }
+
+        // ============================================================
+        // VIEW RENDERING
+        // ============================================================
+        function showWelcome() {
+            document.getElementById('welcomeState').classList.remove('hidden');
+            document.getElementById('loadingState').classList.add('hidden');
+            document.getElementById('kanbanView').classList.add('hidden');
+            document.getElementById('errorState').classList.add('hidden');
+            document.getElementById('breadcrumb').classList.add('hidden');
+        }
+
+        function showLoading() {
+            document.getElementById('welcomeState').classList.add('hidden');
+            document.getElementById('loadingState').classList.remove('hidden');
+            document.getElementById('kanbanView').classList.add('hidden');
+            document.getElementById('errorState').classList.add('hidden');
+        }
+
+        function showKanban() {
+            document.getElementById('welcomeState').classList.add('hidden');
+            document.getElementById('loadingState').classList.add('hidden');
+            document.getElementById('kanbanView').classList.remove('hidden');
+            document.getElementById('errorState').classList.add('hidden');
+        }
+
+        function showError(message) {
+            const errorState = document.getElementById('errorState');
+            errorState.textContent = message;
+            errorState.classList.remove('hidden');
+        }
+
+        // HOME VIEW - One column per account, showing today's emails/tasks
+        async function loadHomeView() {
+            currentView = 'home';
+            currentAccountId = null;
+            document.getElementById('breadcrumb').classList.add('hidden');
+
+            if (accounts.length === 0) {
+                showWelcome();
+                return;
+            }
+
+            showLoading();
+
+            // Clear cache to fetch fresh data
+            emailCache = {};
+            taskCache = {};
+
+            const kanbanBoard = document.getElementById('kanbanBoard');
+            kanbanBoard.innerHTML = '';
+
+            // Always fetch from start of week so cache has full week data
+            const startOfWeek = getStartOfWeekParis();
+
+            // Create columns for each account
+            for (const account of accounts) {
+                const column = document.createElement('div');
+                column.className = 'kanban-column';
+                column.draggable = true;
+                column.dataset.accountId = account.id;
+                column.innerHTML = `
+                    <div class="column-header" style="background: ${account.color}">
+                        <div class="account-name" onclick="loadAccountView('${account.id}')" style="cursor: pointer; flex: 1;">
+                            <span class="provider-icon">${PROVIDER_ICONS[account.provider]}</span>
+                            <span>${escapeHtml(account.name)}</span>
+                        </div>
+                        <span class="count">...</span>
+                    </div>
+                    <div class="column-cards">
+                        <div class="loading" style="height: 200px; font-size: 0.9rem;">
+                            <div class="spinner" style="width: 24px; height: 24px;"></div>
+                        </div>
+                    </div>
+                `;
+
+                // Drag and drop events
+                column.addEventListener('dragstart', handleDragStart);
+                column.addEventListener('dragend', handleDragEnd);
+                column.addEventListener('dragover', handleDragOver);
+                column.addEventListener('dragenter', handleDragEnter);
+                column.addEventListener('dragleave', handleDragLeave);
+                column.addEventListener('drop', handleDrop);
+
+                kanbanBoard.appendChild(column);
+            }
+
+            showKanban();
+
+            // Fetch data for each account
+            for (const account of accounts) {
+                const columnIndex = accounts.indexOf(account);
+                const column = kanbanBoard.children[columnIndex];
+                const cardsContainer = column.querySelector('.column-cards');
+                const countBadge = column.querySelector('.count');
+
+                try {
+                    if (isTaskProvider(account.provider)) {
+                        // Fetch tasks for TickTick
+                        const tasks = await fetchTickTickTasks(account, startOfWeek);
+                        taskCache[account.id] = tasks;
+
+                        const todayTasks = getTodayTasks(tasks);
+                        countBadge.textContent = todayTasks.length;
+
+                        if (todayTasks.length === 0) {
+                            cardsContainer.innerHTML = '<div class="empty-state">No tasks today</div>';
+                        } else {
+                            cardsContainer.innerHTML = '';
+                            todayTasks.forEach(task => {
+                                cardsContainer.appendChild(createTaskCard(task, account.color, account));
+                            });
+                        }
+                    } else {
+                        // Fetch emails for email accounts
+                        const emails = await fetchEmailsForAccount(account, startOfWeek);
+                        emailCache[account.id] = emails;
+
+                        const todayEmails = emails.filter(e => isTodayEmail(e.receivedDateTime));
+                        countBadge.textContent = todayEmails.length;
+
+                        if (todayEmails.length === 0) {
+                            cardsContainer.innerHTML = '<div class="empty-state">No emails today</div>';
+                        } else {
+                            cardsContainer.innerHTML = '';
+                            todayEmails.forEach(email => {
+                                cardsContainer.appendChild(createEmailCard(email, account.color, account));
+                            });
+                        }
+                    }
+                } catch (error) {
+                    console.error(`Error fetching data for ${account.name}:`, error);
+                    cardsContainer.innerHTML = `<div class="error-message">${escapeHtml(error.message)}</div>`;
+                    countBadge.textContent = '!';
+                }
+            }
+        }
+
+        // ACCOUNT VIEW - Weekly view for a specific account
+        async function loadAccountView(accountId) {
+            const account = getAccount(accountId);
+            if (!account) return;
+
+            currentView = 'account';
+            currentAccountId = accountId;
+
+            // Show breadcrumb
+            document.getElementById('breadcrumb').classList.remove('hidden');
+            document.getElementById('breadcrumbAccount').textContent = account.name;
+
+            showLoading();
+
+            const kanbanBoard = document.getElementById('kanbanBoard');
+            kanbanBoard.innerHTML = '';
+
+            const startOfWeek = getStartOfWeekParis();
+
+            try {
+                if (isTaskProvider(account.provider)) {
+                    // Fetch tasks if not cached
+                    if (!taskCache[accountId]) {
+                        taskCache[accountId] = await fetchTickTickTasks(account, startOfWeek);
+                    }
+
+                    const tasks = taskCache[accountId];
+                    const todayStr = getDateString(new Date());
+
+                    // Create columns for each day
+                    dayNames.forEach((dayName, index) => {
+                        const columnDate = new Date(startOfWeek);
+                        columnDate.setDate(columnDate.getDate() + index);
+                        const columnDateStr = getDateString(columnDate);
+                        const isTodayColumn = columnDateStr === todayStr;
+                        const isPast = columnDateStr < todayStr;
+                        const isFuture = columnDateStr > todayStr;
+
+                        // Get tasks for this day:
+                        // - Past days: show completed tasks (completed on that day)
+                        // - Today: show tasks due today + completed today + overdue
+                        // - Future days: show planned tasks (due on that day)
+                        let dayTasks = [];
+                        if (isTodayColumn) {
+                            dayTasks = getTodayTasks(tasks);
+                        } else if (isPast) {
+                            // Past: show tasks completed on that day
+                            dayTasks = getTasksForDay(tasks, columnDate, true).filter(t => t.isCompleted);
+                        } else {
+                            // Future: show tasks due on that day (not completed)
+                            dayTasks = getTasksForDay(tasks, columnDate, false);
+                        }
+
+                        const column = document.createElement('div');
+                        column.className = `kanban-column day-column${isTodayColumn ? ' today' : ''}`;
+
+                        const dateStr = columnDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+
+                        column.innerHTML = `
+                            <div class="column-header" style="background: ${account.color}">
+                                <span>${dayName} (${dateStr})</span>
+                                <span class="count">${dayTasks.length}</span>
+                            </div>
+                            <div class="column-cards"></div>
+                        `;
+
+                        kanbanBoard.appendChild(column);
+
+                        const cardsContainer = column.querySelector('.column-cards');
+
+                        if (dayTasks.length === 0) {
+                            cardsContainer.innerHTML = `<div class="empty-state">No tasks</div>`;
+                        } else {
+                            dayTasks.forEach(task => {
+                                cardsContainer.appendChild(createTaskCard(task, account.color, account));
+                            });
+                        }
+                    });
+                } else {
+                    // Email account - existing logic
+                    if (!emailCache[accountId]) {
+                        emailCache[accountId] = await fetchEmailsForAccount(account, startOfWeek);
+                    }
+
+                    const emails = emailCache[accountId];
+
+                    // Group by day
+                    const emailsByDay = Array(7).fill(null).map(() => []);
+                    emails.forEach(email => {
+                        const dayIndex = getDayIndex(new Date(email.receivedDateTime));
+                        if (dayIndex >= 0 && dayIndex < 7) {
+                            emailsByDay[dayIndex].push(email);
+                        }
+                    });
+
+                    // Create columns
+                    dayNames.forEach((dayName, index) => {
+                        const columnDate = new Date(startOfWeek);
+                        columnDate.setDate(columnDate.getDate() + index);
+                        const isTodayColumn = isToday(columnDate);
+                        const dayEmails = emailsByDay[index];
+
+                        const column = document.createElement('div');
+                        column.className = `kanban-column day-column${isTodayColumn ? ' today' : ''}`;
+
+                        const dateStr = columnDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+
+                        column.innerHTML = `
+                            <div class="column-header" style="background: ${account.color}">
+                                <span>${dayName} (${dateStr})</span>
+                                <span class="count">${dayEmails.length}</span>
+                            </div>
+                            <div class="column-cards"></div>
+                        `;
+
+                        kanbanBoard.appendChild(column);
+
+                        const cardsContainer = column.querySelector('.column-cards');
+
+                        if (dayEmails.length === 0) {
+                            cardsContainer.innerHTML = '<div class="empty-state">No emails</div>';
+                        } else {
+                            dayEmails.forEach(email => {
+                                cardsContainer.appendChild(createEmailCard(email, account.color, account));
+                            });
+                        }
+                    });
+                }
+
+                showKanban();
+            } catch (error) {
+                console.error('Error loading account view:', error);
+                showError(`Failed to load ${isTaskProvider(account.provider) ? 'tasks' : 'emails'}: ${error.message}`);
+            }
+        }
+
+        function createEmailCard(email, color, account) {
+            const card = document.createElement('div');
+            card.className = 'email-card';
+            card.style.borderLeftColor = color;
+            card.dataset.emailId = email.id;
+
+            const emailDate = new Date(email.receivedDateTime);
+            const timeStr = formatTime(emailDate);
+            const isStarred = email.isStarred || email.isFlagged;
+
+            card.innerHTML = `
+                <div class="email-actions">
+                    <button onclick="toggleStar(event, '${account.id}', '${email.id}')" class="${isStarred ? 'starred' : ''}" title="${isStarred ? 'Unstar' : 'Star'}">
+                        ${isStarred ? '★' : '☆'}
+                    </button>
+                    <button onclick="archiveEmail(event, '${account.id}', '${email.id}')" title="Archive">📥</button>
+                </div>
+                <div class="email-content" onclick="window.open('${email.webLink}', '_blank')">
+                    <div class="email-sender">${escapeHtml(email.sender)}</div>
+                    <div class="email-subject">${escapeHtml(email.subject)}</div>
+                    <div class="email-time">${timeStr}</div>
+                </div>
+            `;
+
+            return card;
+        }
+
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        function createTaskCard(task, color, account) {
+            const card = document.createElement('div');
+            card.className = 'email-card'; // Reuse email-card styling
+            card.style.borderLeftColor = color;
+            card.dataset.taskId = task.id;
+
+            // Show project name
+            let projectLabel = task.projectName || 'Inbox';
+            if (task.isCompleted) {
+                projectLabel = `✓ ${projectLabel}`;
+            }
+
+            // Priority indicator
+            const priorityColors = {
+                0: '', // None
+                1: '#4772fa', // Low - blue
+                3: '#ffa500', // Medium - orange
+                5: '#ff4500' // High - red
+            };
+            const priorityLabels = {
+                0: '',
+                1: '○',
+                3: '◐',
+                5: '●'
+            };
+            const priorityHtml = task.priority > 0 ?
+                `<span style="color: ${priorityColors[task.priority] || '#666'}; margin-right: 4px;">${priorityLabels[task.priority] || ''}</span>` : '';
+
+            // Completed styling
+            const completedClass = task.isCompleted ? 'style="text-decoration: line-through; opacity: 0.7;"' : '';
+
+            card.innerHTML = `
+                <div class="email-actions">
+                    <button onclick="toggleTaskComplete(event, '${account.id}', '${task.id}', '${task.projectId}', ${task.isCompleted})"
+                            class="${task.isCompleted ? 'starred' : ''}"
+                            title="${task.isCompleted ? 'Mark incomplete' : 'Mark complete'}">
+                        ${task.isCompleted ? '✓' : '○'}
+                    </button>
+                </div>
+                <div class="email-content" onclick="window.open('${task.webLink}', '_blank')" ${completedClass}>
+                    <div class="email-sender">${priorityHtml}${escapeHtml(task.title)}</div>
+                    ${task.content ? `<div class="email-subject">${escapeHtml(task.content.substring(0, 100))}</div>` : ''}
+                    <div class="email-time">${escapeHtml(projectLabel)}</div>
+                </div>
+            `;
+
+            return card;
+        }
+
+        // ============================================================
+        // EMAIL ACTIONS (Archive & Star)
+        // ============================================================
+        async function archiveEmail(event, accountId, emailId) {
+            event.stopPropagation();
+            const account = getAccount(accountId);
+            if (!account) return;
+
+            const card = event.target.closest('.email-card');
+            const originalContent = card.innerHTML;
+            card.innerHTML = '<div style="padding: 1rem; text-align: center; color: #666;">Archiving...</div>';
+
+            try {
+                if (account.provider === 'office365' || account.provider === 'office365-shared') {
+                    await archiveMicrosoftEmail(account, emailId);
+                } else if (account.provider === 'gmail') {
+                    await archiveGmailEmail(account, emailId);
+                }
+
+                // Remove from cache
+                if (emailCache[accountId]) {
+                    emailCache[accountId] = emailCache[accountId].filter(e => e.id !== emailId);
+                }
+
+                // Animate removal
+                card.style.transition = 'all 0.3s';
+                card.style.opacity = '0';
+                card.style.transform = 'translateX(100%)';
+                setTimeout(() => card.remove(), 300);
+
+            } catch (error) {
+                console.error('Archive failed:', error);
+                card.innerHTML = originalContent;
+                alert('Failed to archive: ' + error.message);
+            }
+        }
+
+        async function toggleStar(event, accountId, emailId) {
+            event.stopPropagation();
+            const account = getAccount(accountId);
+            if (!account) return;
+
+            const button = event.target;
+            const isCurrentlyStarred = button.classList.contains('starred');
+
+            // Optimistic UI update
+            button.textContent = isCurrentlyStarred ? '☆' : '★';
+            button.classList.toggle('starred');
+
+            try {
+                if (account.provider === 'office365' || account.provider === 'office365-shared') {
+                    await toggleMicrosoftFlag(account, emailId, !isCurrentlyStarred);
+                } else if (account.provider === 'gmail') {
+                    await toggleGmailStar(account, emailId, !isCurrentlyStarred);
+                }
+
+                // Update cache
+                if (emailCache[accountId]) {
+                    const email = emailCache[accountId].find(e => e.id === emailId);
+                    if (email) {
+                        email.isStarred = !isCurrentlyStarred;
+                        email.isFlagged = !isCurrentlyStarred;
+                    }
+                }
+
+            } catch (error) {
+                console.error('Star toggle failed:', error);
+                // Revert UI
+                button.textContent = isCurrentlyStarred ? '★' : '☆';
+                button.classList.toggle('starred');
+                alert('Failed to update: ' + error.message);
+            }
+        }
+
+        // Microsoft Archive (move to Archive folder)
+        async function archiveMicrosoftEmail(account, emailId) {
+            const accessToken = await authenticateMicrosoft(account);
+
+            let endpoint;
+            if (account.provider === 'office365-shared' && account.sharedMailbox) {
+                endpoint = `https://graph.microsoft.com/v1.0/users/${account.sharedMailbox}/messages/${emailId}/move`;
+            } else {
+                endpoint = `https://graph.microsoft.com/v1.0/me/messages/${emailId}/move`;
+            }
+
+            const response = await fetch(endpoint, {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${accessToken}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    destinationId: 'archive'
+                })
+            });
+
+            if (!response.ok) {
+                const error = await response.json();
+                throw new Error(error.error?.message || `API error: ${response.status}`);
+            }
+        }
+
+        // Microsoft Flag toggle
+        async function toggleMicrosoftFlag(account, emailId, flagged) {
+            const accessToken = await authenticateMicrosoft(account);
+
+            let endpoint;
+            if (account.provider === 'office365-shared' && account.sharedMailbox) {
+                endpoint = `https://graph.microsoft.com/v1.0/users/${account.sharedMailbox}/messages/${emailId}`;
+            } else {
+                endpoint = `https://graph.microsoft.com/v1.0/me/messages/${emailId}`;
+            }
+
+            const response = await fetch(endpoint, {
+                method: 'PATCH',
+                headers: {
+                    'Authorization': `Bearer ${accessToken}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    flag: {
+                        flagStatus: flagged ? 'flagged' : 'notFlagged'
+                    }
+                })
+            });
+
+            if (!response.ok) {
+                const error = await response.json();
+                throw new Error(error.error?.message || `API error: ${response.status}`);
+            }
+        }
+
+        // Gmail Archive (remove INBOX label)
+        async function archiveGmailEmail(account, emailId) {
+            const accessToken = await authenticateGoogle(account);
+
+            const response = await fetch(
+                `https://gmail.googleapis.com/gmail/v1/users/me/messages/${emailId}/modify`,
+                {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${accessToken}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        removeLabelIds: ['INBOX']
+                    })
+                }
+            );
+
+            if (!response.ok) {
+                const error = await response.json();
+                throw new Error(error.error?.message || `API error: ${response.status}`);
+            }
+        }
+
+        // Gmail Star toggle
+        async function toggleGmailStar(account, emailId, starred) {
+            const accessToken = await authenticateGoogle(account);
+
+            const response = await fetch(
+                `https://gmail.googleapis.com/gmail/v1/users/me/messages/${emailId}/modify`,
+                {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${accessToken}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(starred ? {
+                        addLabelIds: ['STARRED']
+                    } : {
+                        removeLabelIds: ['STARRED']
+                    })
+                }
+            );
+
+            if (!response.ok) {
+                const error = await response.json();
+                throw new Error(error.error?.message || `API error: ${response.status}`);
+            }
+        }
+
+        // ============================================================
+        // TASK ACTIONS (TickTick)
+        // ============================================================
+        async function toggleTaskComplete(event, accountId, taskId, projectId, currentlyCompleted) {
+            event.stopPropagation();
+            const account = getAccount(accountId);
+            if (!account) return;
+
+            const button = event.target;
+            const card = event.target.closest('.email-card');
+            const contentDiv = card.querySelector('.email-content');
+
+            // Optimistic UI update
+            if (currentlyCompleted) {
+                button.textContent = '○';
+                button.classList.remove('starred');
+                contentDiv.style.textDecoration = '';
+                contentDiv.style.opacity = '';
+            } else {
+                button.textContent = '✓';
+                button.classList.add('starred');
+                contentDiv.style.textDecoration = 'line-through';
+                contentDiv.style.opacity = '0.7';
+            }
+
+            try {
+                const accessToken = await authenticateTickTick(account);
+                const endpoint = currentlyCompleted ?
+                    `${CONFIG.ticktick.apiBase}/project/${projectId}/task/${taskId}` :
+                    `${CONFIG.ticktick.apiBase}/project/${projectId}/task/${taskId}/complete`;
+
+                const response = await fetch(endpoint, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${accessToken}`,
+                        'Content-Type': 'application/json'
+                    }
+                });
+
+                if (!response.ok) {
+                    throw new Error(`TickTick API error: ${response.status}`);
+                }
+
+                // Update cache
+                if (taskCache[accountId]) {
+                    const task = taskCache[accountId].find(t => t.id === taskId);
+                    if (task) {
+                        task.isCompleted = !currentlyCompleted;
+                        if (!currentlyCompleted) {
+                            task.completedTime = new Date().toISOString();
+                        } else {
+                            task.completedTime = null;
+                        }
+                    }
+                }
+
+            } catch (error) {
+                console.error('Task toggle failed:', error);
+                // Revert UI
+                if (currentlyCompleted) {
+                    button.textContent = '✓';
+                    button.classList.add('starred');
+                    contentDiv.style.textDecoration = 'line-through';
+                    contentDiv.style.opacity = '0.7';
+                } else {
+                    button.textContent = '○';
+                    button.classList.remove('starred');
+                    contentDiv.style.textDecoration = '';
+                    contentDiv.style.opacity = '';
+                }
+                alert('Failed to update task: ' + error.message);
+            }
+        }
+
+        // ============================================================
+        // NAVIGATION
+        // ============================================================
+        function goHome() {
+            loadHomeView();
+        }
+
+        // ============================================================
+        // MODALS
+        // ============================================================
+        function showAddAccountModal() {
+            document.getElementById('addAccountModal').classList.remove('hidden');
+        }
+
+        function showSettingsModal() {
+            renderAccountList();
+            document.getElementById('settingsModal').classList.remove('hidden');
+        }
+
+        function showAccountSetupModal(provider, accountId = null) {
+            const modal = document.getElementById('accountSetupModal');
+            const title = document.getElementById('setupModalTitle');
+            const nameInput = document.getElementById('accountName');
+            const sharedGroup = document.getElementById('sharedMailboxGroup');
+            const sharedInput = document.getElementById('sharedMailbox');
+            const gmailAccountNumGroup = document.getElementById('gmailAccountNumGroup');
+            const gmailAccountNumInput = document.getElementById('gmailAccountNumber');
+            const ticktickGroup = document.getElementById('ticktickCredsGroup');
+            const ticktickClientIdInput = document.getElementById('ticktickClientId');
+            const ticktickClientSecretInput = document.getElementById('ticktickClientSecret');
+            const providerInput = document.getElementById('setupProvider');
+            const accountIdInput = document.getElementById('setupAccountId');
+
+            title.textContent = accountId ? 'Edit Account' : `Add ${PROVIDER_NAMES[provider]} Account`;
+            providerInput.value = provider;
+            accountIdInput.value = accountId || '';
+
+            // Show/hide shared mailbox field
+            if (provider === 'office365-shared') {
+                sharedGroup.classList.remove('hidden');
+                sharedInput.required = true;
+            } else {
+                sharedGroup.classList.add('hidden');
+                sharedInput.required = false;
+            }
+
+            // Show/hide Gmail account number field
+            if (provider === 'gmail') {
+                gmailAccountNumGroup.classList.remove('hidden');
+            } else {
+                gmailAccountNumGroup.classList.add('hidden');
+            }
+
+            // Show/hide TickTick credentials fields
+            if (provider === 'ticktick') {
+                ticktickGroup.classList.remove('hidden');
+                ticktickClientIdInput.required = true;
+                ticktickClientSecretInput.required = true;
+            } else {
+                ticktickGroup.classList.add('hidden');
+                ticktickClientIdInput.required = false;
+                ticktickClientSecretInput.required = false;
+            }
+
+            // Populate color picker
+            const colorPicker = document.getElementById('colorPicker');
+            colorPicker.innerHTML = '';
+            const defaultColors = {
+                'office365': '#0078d4',
+                'office365-shared': '#00a86b',
+                'gmail': '#ea4335',
+                'yahoo': '#6001d2',
+                'ticktick': '#4772fa'
+            };
+            const selectedColor = accountId ? getAccount(accountId)?.color : defaultColors[provider];
+
+            COLORS.forEach(color => {
+                const option = document.createElement('div');
+                option.className = `color-option${color === selectedColor ? ' selected' : ''}`;
+                option.style.background = color;
+                option.onclick = () => selectColor(option, color);
+                colorPicker.appendChild(option);
+            });
+
+            // Pre-fill if editing
+            if (accountId) {
+                const account = getAccount(accountId);
+                nameInput.value = account.name;
+                if (account.sharedMailbox) {
+                    sharedInput.value = account.sharedMailbox;
+                }
+                if (account.gmailAccountNumber !== undefined) {
+                    gmailAccountNumInput.value = account.gmailAccountNumber;
+                } else {
+                    gmailAccountNumInput.value = 0;
+                }
+                if (account.ticktickClientId) {
+                    ticktickClientIdInput.value = account.ticktickClientId;
+                }
+                if (account.ticktickClientSecret) {
+                    ticktickClientSecretInput.value = account.ticktickClientSecret;
+                }
+            } else {
+                nameInput.value = '';
+                sharedInput.value = '';
+                gmailAccountNumInput.value = 0;
+                ticktickClientIdInput.value = '';
+                ticktickClientSecretInput.value = '';
+            }
+
+            modal.classList.remove('hidden');
+        }
+
+        function showColorPickerModal(accountId) {
+            const modal = document.getElementById('colorPickerModal');
+            const colorPicker = document.getElementById('editColorPicker');
+            const accountIdInput = document.getElementById('editAccountId');
+
+            accountIdInput.value = accountId;
+            const account = getAccount(accountId);
+
+            colorPicker.innerHTML = '';
+            COLORS.forEach(color => {
+                const option = document.createElement('div');
+                option.className = `color-option${color === account.color ? ' selected' : ''}`;
+                option.style.background = color;
+                option.onclick = () => {
+                    account.color = color;
+                    saveAccounts();
+                    closeAllModals();
+                    if (currentView === 'home') {
+                        loadHomeView();
+                    } else {
+                        loadAccountView(currentAccountId);
+                    }
+                };
+                colorPicker.appendChild(option);
+            });
+
+            modal.classList.remove('hidden');
+        }
+
+        function selectColor(element, color) {
+            document.querySelectorAll('#colorPicker .color-option').forEach(el => el.classList.remove('selected'));
+            element.classList.add('selected');
+        }
+
+        function closeModal(event) {
+            if (event.target.classList.contains('modal-overlay')) {
+                event.target.classList.add('hidden');
+            }
+        }
+
+        function closeAllModals() {
+            document.querySelectorAll('.modal-overlay').forEach(el => el.classList.add('hidden'));
+        }
+
+        // ============================================================
+        // ACCOUNT CRUD
+        // ============================================================
+        function addAccount(provider) {
+            closeAllModals();
+            showAccountSetupModal(provider);
+        }
+
+        async function saveAccountSetup(event) {
+            event.preventDefault();
+
+            const provider = document.getElementById('setupProvider').value;
+            const accountId = document.getElementById('setupAccountId').value;
+            const name = document.getElementById('accountName').value;
+            const sharedMailbox = document.getElementById('sharedMailbox').value;
+            const gmailAccountNumber = parseInt(document.getElementById('gmailAccountNumber').value) || 0;
+            const ticktickClientId = document.getElementById('ticktickClientId').value;
+            const ticktickClientSecret = document.getElementById('ticktickClientSecret').value;
+            const selectedColorEl = document.querySelector('#colorPicker .color-option.selected');
+            const color = selectedColorEl ? selectedColorEl.style.background : COLORS[0];
+
+            if (accountId) {
+                // Edit existing
+                const account = getAccount(accountId);
+                account.name = name;
+                account.color = color;
+                if (provider === 'office365-shared') {
+                    account.sharedMailbox = sharedMailbox;
+                }
+                if (provider === 'gmail') {
+                    account.gmailAccountNumber = gmailAccountNumber;
+                }
+                if (provider === 'ticktick') {
+                    account.ticktickClientId = ticktickClientId;
+                    account.ticktickClientSecret = ticktickClientSecret;
+                    // Clear existing token if credentials changed
+                    if (account.ticktickClientId !== ticktickClientId || account.ticktickClientSecret !== ticktickClientSecret) {
+                        account.ticktickToken = undefined;
+                    }
+                }
+            } else {
+                // Create new
+                const newAccount = {
+                    id: generateId(),
+                    name,
+                    provider,
+                    email: '',
+                    color,
+                    sharedMailbox: provider === 'office365-shared' ? sharedMailbox : undefined,
+                    gmailAccountNumber: provider === 'gmail' ? gmailAccountNumber : undefined,
+                    ticktickClientId: provider === 'ticktick' ? ticktickClientId : undefined,
+                    ticktickClientSecret: provider === 'ticktick' ? ticktickClientSecret : undefined
+                };
+                accounts.push(newAccount);
+
+                // For TickTick, trigger OAuth flow
+                if (provider === 'ticktick') {
+                    saveAccounts();
+                    closeAllModals();
+                    await startTickTickOAuth(newAccount);
+                    return;
+                }
+            }
+
+            saveAccounts();
+            closeAllModals();
+            await loadHomeView();
+        }
+
+        function removeAccount(accountId) {
+            if (!confirm('Are you sure you want to remove this account?')) return;
+
+            accounts = accounts.filter(a => a.id !== accountId);
+            delete emailCache[accountId];
+            delete taskCache[accountId];
+            saveAccounts();
+            renderAccountList();
+
+            if (accounts.length === 0) {
+                closeAllModals();
+                showWelcome();
+            } else if (currentAccountId === accountId) {
+                loadHomeView();
+            }
+        }
+
+        function renderAccountList() {
+            const list = document.getElementById('accountList');
+            list.innerHTML = '';
+
+            if (accounts.length === 0) {
+                list.innerHTML = '<p style="color: #666; text-align: center; padding: 1rem;">No accounts connected</p>';
+                return;
+            }
+
+            accounts.forEach((account, index) => {
+                const item = document.createElement('div');
+                item.className = 'account-item';
+                // Show Gmail account number if it's a Gmail account
+                const gmailInfo = account.provider === 'gmail' ? ` (u/${account.gmailAccountNumber || 0})` : '';
+                item.innerHTML = `
+                    <div class="order-buttons">
+                        <button onclick="moveAccount('${account.id}', -1)" ${index === 0 ? 'disabled style="opacity:0.3"' : ''}>▲</button>
+                        <button onclick="moveAccount('${account.id}', 1)" ${index === accounts.length - 1 ? 'disabled style="opacity:0.3"' : ''}>▼</button>
+                    </div>
+                    <div class="color-dot" style="background: ${account.color}"></div>
+                    <div class="info">
+                        <strong>${escapeHtml(account.name)}</strong>
+                        <span>${PROVIDER_ICONS[account.provider]} ${PROVIDER_NAMES[account.provider]}${gmailInfo}${account.email ? ' - ' + account.email : ''}</span>
+                    </div>
+                    <button onclick="closeAllModals(); showAccountSetupModal('${account.provider}', '${account.id}')" style="padding: 0.25rem 0.5rem; font-size: 0.75rem;">Edit</button>
+                    <button onclick="showColorPickerModal('${account.id}')" style="padding: 0.25rem 0.5rem; font-size: 0.75rem;">Color</button>
+                    <button class="danger" onclick="removeAccount('${account.id}')" style="padding: 0.25rem 0.5rem; font-size: 0.75rem;">Remove</button>
+                `;
+                list.appendChild(item);
+            });
+        }
+
+        function moveAccount(accountId, direction) {
+            const index = accounts.findIndex(a => a.id === accountId);
+            if (index === -1) return;
+
+            const newIndex = index + direction;
+            if (newIndex < 0 || newIndex >= accounts.length) return;
+
+            // Swap accounts
+            [accounts[index], accounts[newIndex]] = [accounts[newIndex], accounts[index]];
+            saveAccounts();
+            renderAccountList();
+        }
+
+        // ============================================================
+        // EXPORT / IMPORT CONFIG
+        // ============================================================
+        function exportConfig() {
+            const config = {
+                version: 1,
+                exportDate: new Date().toISOString(),
+                accounts: accounts.map(acc => ({
+                    ...acc,
+                    // Remove sensitive tokens from export
+                    googleToken: undefined,
+                    ticktickToken: undefined,
+                    ticktickRefreshToken: undefined,
+                    ticktickTokenExpiry: undefined,
+                    ticktickClientSecret: undefined // Keep clientId but not secret
+                }))
+            };
+
+            const blob = new Blob([JSON.stringify(config, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `email-kanban-config-${new Date().toISOString().split('T')[0]}.json`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        }
+
+        function importConfig(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                try {
+                    const config = JSON.parse(e.target.result);
+
+                    if (!config.accounts || !Array.isArray(config.accounts)) {
+                        throw new Error('Invalid config file: missing accounts array');
+                    }
+
+                    // Validate each account has required fields
+                    for (const acc of config.accounts) {
+                        if (!acc.id || !acc.name || !acc.provider) {
+                            throw new Error('Invalid config file: account missing required fields');
+                        }
+                    }
+
+                    if (!confirm(`This will replace your current ${accounts.length} account(s) with ${config.accounts.length} account(s) from the backup. Continue?`)) {
+                        return;
+                    }
+
+                    accounts = config.accounts;
+                    saveAccounts();
+                    renderAccountList();
+                    alert('Configuration imported successfully! You may need to re-authenticate your accounts (email accounts) or re-enter your access tokens (TickTick).');
+
+                } catch (err) {
+                    alert('Failed to import config: ' + err.message);
+                }
+            };
+            reader.readAsText(file);
+
+            // Reset file input so same file can be selected again
+            event.target.value = '';
+        }
+
+        // ============================================================
+        // DRAG AND DROP FOR COLUMNS
+        // ============================================================
+        let draggedAccountId = null;
+
+        function handleDragStart(e) {
+            draggedAccountId = this.dataset.accountId;
+            this.classList.add('dragging');
+            e.dataTransfer.effectAllowed = 'move';
+        }
+
+        function handleDragEnd(e) {
+            this.classList.remove('dragging');
+            document.querySelectorAll('.kanban-column').forEach(col => {
+                col.classList.remove('drag-over');
+            });
+        }
+
+        function handleDragOver(e) {
+            e.preventDefault();
+            e.dataTransfer.dropEffect = 'move';
+        }
+
+        function handleDragEnter(e) {
+            e.preventDefault();
+            if (this.dataset.accountId !== draggedAccountId) {
+                this.classList.add('drag-over');
+            }
+        }
+
+        function handleDragLeave(e) {
+            this.classList.remove('drag-over');
+        }
+
+        function handleDrop(e) {
+            e.preventDefault();
+            this.classList.remove('drag-over');
+
+            const targetAccountId = this.dataset.accountId;
+            if (!draggedAccountId || draggedAccountId === targetAccountId) return;
+
+            const fromIndex = accounts.findIndex(a => a.id === draggedAccountId);
+            const toIndex = accounts.findIndex(a => a.id === targetAccountId);
+
+            if (fromIndex === -1 || toIndex === -1) return;
+
+            // Remove from old position and insert at new position
+            const [movedAccount] = accounts.splice(fromIndex, 1);
+            accounts.splice(toIndex, 0, movedAccount);
+
+            saveAccounts();
+            loadHomeView(); // Refresh the view
+        }
+
+        // ============================================================
+        // INITIALIZE
+        // ============================================================
+        initialize();
+    </script>
+</body>
+</html>

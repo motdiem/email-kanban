@@ -1,0 +1,658 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Email Kanban</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #f5f7fa;
+            min-height: 100vh;
+        }
+        header {
+            background: #1a1a2e;
+            color: white;
+            padding: 1rem 2rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        header h1 { font-size: 1.5rem; cursor: pointer; }
+        .header-actions { display: flex; gap: 0.75rem; }
+        button {
+            background: white;
+            color: #1a1a2e;
+            border: none;
+            padding: 0.5rem 1rem;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 0.85rem;
+            font-weight: 500;
+        }
+        button:hover { background: #f0f0f0; }
+        button.primary { background: #4CAF50; color: white; }
+        button.secondary { background: transparent; color: white; border: 1px solid rgba(255,255,255,0.3); }
+        button.danger { background: #f44336; color: white; }
+        .breadcrumb {
+            padding: 1rem 2rem;
+            background: #fff;
+            border-bottom: 1px solid #e0e0e0;
+        }
+        .breadcrumb a { color: #0078d4; cursor: pointer; }
+        .kanban-container { padding: 1.5rem; overflow-x: auto; }
+        .kanban-board { display: flex; gap: 1rem; min-width: max-content; }
+        .kanban-column {
+            background: #ebecf0;
+            border-radius: 8px;
+            width: 300px;
+            min-width: 300px;
+            max-height: calc(100vh - 180px);
+            display: flex;
+            flex-direction: column;
+        }
+        .column-header {
+            padding: 0.75rem 1rem;
+            font-weight: 600;
+            color: white;
+            border-radius: 8px 8px 0 0;
+            display: flex;
+            justify-content: space-between;
+            cursor: pointer;
+        }
+        .column-header .count {
+            background: rgba(255,255,255,0.3);
+            padding: 0.2rem 0.6rem;
+            border-radius: 10px;
+            font-size: 0.8rem;
+        }
+        .column-cards { padding: 0.5rem; overflow-y: auto; flex: 1; }
+        .email-card {
+            background: white;
+            border-radius: 6px;
+            padding: 0.75rem;
+            margin-bottom: 0.5rem;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            cursor: pointer;
+            border-left: 3px solid transparent;
+        }
+        .email-card:hover { box-shadow: 0 3px 8px rgba(0,0,0,0.15); }
+        .email-sender { font-weight: 600; color: #172b4d; font-size: 0.9rem; margin-bottom: 0.25rem; }
+        .email-subject { color: #5e6c84; font-size: 0.85rem; }
+        .email-time { color: #8993a4; font-size: 0.75rem; margin-top: 0.5rem; }
+        .today { background: #e3f2fd; }
+        .today .column-header { font-weight: 700; }
+        .loading, .login-container, .welcome-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: calc(100vh - 120px);
+            gap: 1rem;
+        }
+        .spinner {
+            width: 40px;
+            height: 40px;
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #0078d4;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin { 100% { transform: rotate(360deg); } }
+        .modal-overlay {
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0,0,0,0.5);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+        }
+        .modal {
+            background: white;
+            border-radius: 12px;
+            padding: 1.5rem;
+            width: 90%;
+            max-width: 400px;
+        }
+        .modal h2 { margin-bottom: 1rem; }
+        .form-group { margin-bottom: 1rem; }
+        .form-group label { display: block; margin-bottom: 0.5rem; font-weight: 500; }
+        .form-group input, .form-group select {
+            width: 100%;
+            padding: 0.75rem;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            font-size: 1rem;
+        }
+        .modal-actions { display: flex; justify-content: flex-end; gap: 0.5rem; margin-top: 1rem; }
+        .hidden { display: none !important; }
+        .error { color: #f44336; text-align: center; margin-top: 0.5rem; }
+        .provider-btn {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            padding: 1rem;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            background: white;
+            width: 100%;
+            text-align: left;
+            margin-bottom: 0.5rem;
+        }
+        .provider-btn:hover { border-color: #0078d4; }
+        .provider-btn .icon { font-size: 1.5rem; }
+        .provider-btn strong { display: block; }
+        .provider-btn span { font-size: 0.85rem; color: #666; }
+        .color-picker { display: flex; gap: 0.5rem; flex-wrap: wrap; }
+        .color-option {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            cursor: pointer;
+            border: 2px solid transparent;
+        }
+        .color-option.selected { border-color: #333; }
+        .account-item {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.5rem;
+            border: 1px solid #eee;
+            border-radius: 6px;
+            margin-bottom: 0.5rem;
+        }
+        .account-item .color-dot { width: 12px; height: 12px; border-radius: 50%; }
+        .account-item .info { flex: 1; }
+        .account-item .info strong { display: block; }
+        .account-item .info span { font-size: 0.8rem; color: #666; }
+    </style>
+</head>
+<body>
+    <div id="loginScreen" class="login-container">
+        <h2>Email Kanban</h2>
+        <form onsubmit="login(event)" style="width: 280px;">
+            <div class="form-group">
+                <label>PIN</label>
+                <input type="password" id="pinInput" placeholder="Enter PIN" required autofocus>
+            </div>
+            <div id="loginError" class="error hidden"></div>
+            <button type="submit" class="primary" style="width: 100%;">Login</button>
+        </form>
+    </div>
+
+    <div id="app" class="hidden">
+        <header>
+            <h1 onclick="goHome()">Email Kanban</h1>
+            <div class="header-actions">
+                <button class="primary" onclick="showAddAccountModal()">+ Add Account</button>
+                <button class="secondary" onclick="showSettingsModal()">Settings</button>
+                <button class="secondary" onclick="logout()">Logout</button>
+            </div>
+        </header>
+
+        <div id="breadcrumb" class="breadcrumb hidden">
+            <a onclick="goHome()">Home</a> / <span id="breadcrumbAccount"></span>
+        </div>
+
+        <main>
+            <div id="welcomeState" class="welcome-container hidden">
+                <h2>Welcome to Email Kanban</h2>
+                <p>Add your email accounts to get started.</p>
+                <button class="primary" onclick="showAddAccountModal()">+ Add Account</button>
+            </div>
+
+            <div id="loadingState" class="loading hidden">
+                <div class="spinner"></div>
+                <span>Loading...</span>
+            </div>
+
+            <div id="kanbanView" class="kanban-container hidden">
+                <div class="kanban-board" id="kanbanBoard"></div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Add Account Modal -->
+    <div id="addAccountModal" class="modal-overlay hidden" onclick="closeModal(event)">
+        <div class="modal" onclick="event.stopPropagation()">
+            <h2>Add Account</h2>
+            <button class="provider-btn" onclick="addAccount('office365')">
+                <span class="icon">📧</span>
+                <div><strong>Office 365</strong><span>Outlook, Work accounts</span></div>
+            </button>
+            <button class="provider-btn" onclick="addAccount('gmail')">
+                <span class="icon">📩</span>
+                <div><strong>Gmail</strong><span>Google accounts</span></div>
+            </button>
+            <button class="provider-btn" onclick="addAccount('ticktick')">
+                <span class="icon">✅</span>
+                <div><strong>TickTick</strong><span>Task management</span></div>
+            </button>
+            <div class="modal-actions">
+                <button onclick="closeAllModals()">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Account Setup Modal -->
+    <div id="setupModal" class="modal-overlay hidden" onclick="closeModal(event)">
+        <div class="modal" onclick="event.stopPropagation()">
+            <h2 id="setupTitle">Setup Account</h2>
+            <form onsubmit="saveAccount(event)">
+                <div class="form-group">
+                    <label>Display Name</label>
+                    <input type="text" id="accountName" required placeholder="e.g., Work Email">
+                </div>
+                <div class="form-group hidden" id="gmailNumGroup">
+                    <label>Gmail Account Number (u/X)</label>
+                    <input type="number" id="gmailNum" min="0" value="0">
+                </div>
+                <div class="form-group">
+                    <label>Color</label>
+                    <div class="color-picker" id="colorPicker"></div>
+                </div>
+                <input type="hidden" id="setupProvider">
+                <input type="hidden" id="setupAccountId">
+                <div class="modal-actions">
+                    <button type="button" onclick="closeAllModals()">Cancel</button>
+                    <button type="submit" class="primary">Save & Connect</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Settings Modal -->
+    <div id="settingsModal" class="modal-overlay hidden" onclick="closeModal(event)">
+        <div class="modal" onclick="event.stopPropagation()">
+            <h2>Settings</h2>
+            <h3 style="margin-bottom: 0.5rem; color: #666; font-size: 0.9rem;">Connected Accounts</h3>
+            <div id="accountList"></div>
+            <div class="modal-actions">
+                <button onclick="closeAllModals()">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = '/api';
+        const COLORS = ['#0078d4', '#4285f4', '#ea4335', '#00a86b', '#ff6b35', '#e91e63', '#9c27b0', '#00bcd4'];
+        const PROVIDER_ICONS = { 'office365': '📧', 'gmail': '📩', 'ticktick': '✅' };
+        const PROVIDER_NAMES = { 'office365': 'Office 365', 'gmail': 'Gmail', 'ticktick': 'TickTick' };
+
+        let accounts = [];
+        let currentView = 'home';
+        let currentAccountId = null;
+        let itemCache = {};
+
+        // Auth
+        async function login(e) {
+            e.preventDefault();
+            const pin = document.getElementById('pinInput').value;
+            try {
+                const res = await fetch(`${API_BASE}/auth/login`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'include',
+                    body: JSON.stringify({ pin })
+                });
+                if (!res.ok) throw new Error('Invalid PIN');
+                document.getElementById('loginScreen').classList.add('hidden');
+                document.getElementById('app').classList.remove('hidden');
+                await loadAccounts();
+            } catch (err) {
+                document.getElementById('loginError').textContent = err.message;
+                document.getElementById('loginError').classList.remove('hidden');
+            }
+        }
+
+        async function logout() {
+            await fetch(`${API_BASE}/auth/logout`, { method: 'POST', credentials: 'include' });
+            location.reload();
+        }
+
+        async function checkAuth() {
+            try {
+                const res = await fetch(`${API_BASE}/auth/check`, { credentials: 'include' });
+                if (res.ok) {
+                    document.getElementById('loginScreen').classList.add('hidden');
+                    document.getElementById('app').classList.remove('hidden');
+                    await loadAccounts();
+                }
+            } catch (e) {}
+        }
+
+        // API helpers
+        async function api(path, options = {}) {
+            const res = await fetch(`${API_BASE}${path}`, {
+                ...options,
+                credentials: 'include',
+                headers: { 'Content-Type': 'application/json', ...options.headers }
+            });
+            if (!res.ok) throw new Error(await res.text());
+            return res.json();
+        }
+
+        // Accounts
+        async function loadAccounts() {
+            const data = await api('/accounts');
+            accounts = data.accounts || [];
+            if (accounts.length === 0) {
+                showWelcome();
+            } else {
+                await loadHomeView();
+            }
+        }
+
+        // Views
+        function showWelcome() {
+            document.getElementById('welcomeState').classList.remove('hidden');
+            document.getElementById('loadingState').classList.add('hidden');
+            document.getElementById('kanbanView').classList.add('hidden');
+            document.getElementById('breadcrumb').classList.add('hidden');
+        }
+
+        function showLoading() {
+            document.getElementById('welcomeState').classList.add('hidden');
+            document.getElementById('loadingState').classList.remove('hidden');
+            document.getElementById('kanbanView').classList.add('hidden');
+        }
+
+        function showKanban() {
+            document.getElementById('welcomeState').classList.add('hidden');
+            document.getElementById('loadingState').classList.add('hidden');
+            document.getElementById('kanbanView').classList.remove('hidden');
+        }
+
+        async function loadHomeView() {
+            currentView = 'home';
+            currentAccountId = null;
+            document.getElementById('breadcrumb').classList.add('hidden');
+            if (accounts.length === 0) { showWelcome(); return; }
+
+            showLoading();
+            const board = document.getElementById('kanbanBoard');
+            board.innerHTML = '';
+
+            for (const account of accounts) {
+                const col = document.createElement('div');
+                col.className = 'kanban-column';
+                col.innerHTML = `
+                    <div class="column-header" style="background: ${account.color}" onclick="loadAccountView('${account.id}')">
+                        <span>${PROVIDER_ICONS[account.provider]} ${escapeHtml(account.name)}</span>
+                        <span class="count">...</span>
+                    </div>
+                    <div class="column-cards"><div class="loading" style="height:100px;"><div class="spinner" style="width:24px;height:24px;"></div></div></div>
+                `;
+                board.appendChild(col);
+            }
+
+            showKanban();
+
+            // Fetch items for each account
+            for (let i = 0; i < accounts.length; i++) {
+                const account = accounts[i];
+                const col = board.children[i];
+                const cards = col.querySelector('.column-cards');
+                const count = col.querySelector('.count');
+
+                try {
+                    const data = await api(`/accounts/${account.id}/items`);
+                    itemCache[account.id] = data.items || [];
+
+                    const todayItems = getTodayItems(data.items, account.provider);
+                    count.textContent = todayItems.length;
+
+                    if (todayItems.length === 0) {
+                        cards.innerHTML = '<div style="text-align:center;color:#888;padding:1rem;">No items today</div>';
+                    } else {
+                        cards.innerHTML = '';
+                        todayItems.forEach(item => cards.appendChild(createCard(item, account)));
+                    }
+                } catch (err) {
+                    cards.innerHTML = `<div style="color:#f44336;padding:1rem;">${err.message}</div>`;
+                    count.textContent = '!';
+                }
+            }
+        }
+
+        async function loadAccountView(accountId) {
+            const account = accounts.find(a => a.id === accountId);
+            if (!account) return;
+
+            currentView = 'account';
+            currentAccountId = accountId;
+            document.getElementById('breadcrumb').classList.remove('hidden');
+            document.getElementById('breadcrumbAccount').textContent = account.name;
+
+            showLoading();
+
+            try {
+                if (!itemCache[accountId]) {
+                    const data = await api(`/accounts/${accountId}/items`);
+                    itemCache[accountId] = data.items || [];
+                }
+
+                const items = itemCache[accountId];
+                const board = document.getElementById('kanbanBoard');
+                board.innerHTML = '';
+
+                const days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+                const startOfWeek = getStartOfWeek();
+                const todayStr = getDateStr(new Date());
+
+                days.forEach((day, i) => {
+                    const date = new Date(startOfWeek);
+                    date.setDate(date.getDate() + i);
+                    const dateStr = getDateStr(date);
+                    const isToday = dateStr === todayStr;
+
+                    const dayItems = getItemsForDay(items, dateStr, account.provider, isToday, dateStr < todayStr);
+
+                    const col = document.createElement('div');
+                    col.className = `kanban-column day-column${isToday ? ' today' : ''}`;
+                    col.innerHTML = `
+                        <div class="column-header" style="background: ${account.color}">
+                            <span>${day}${isToday ? ' (Today)' : ''}</span>
+                            <span class="count">${dayItems.length}</span>
+                        </div>
+                        <div class="column-cards"></div>
+                    `;
+                    board.appendChild(col);
+
+                    const cards = col.querySelector('.column-cards');
+                    if (dayItems.length === 0) {
+                        cards.innerHTML = '<div style="text-align:center;color:#888;padding:1rem;">No items</div>';
+                    } else {
+                        dayItems.forEach(item => cards.appendChild(createCard(item, account)));
+                    }
+                });
+
+                showKanban();
+            } catch (err) {
+                alert('Error: ' + err.message);
+                goHome();
+            }
+        }
+
+        function goHome() { loadHomeView(); }
+
+        // Date helpers
+        function getDateStr(date) {
+            return date.toLocaleDateString('en-CA', { timeZone: 'Europe/Paris' });
+        }
+
+        function getStartOfWeek() {
+            const now = new Date();
+            const day = now.getDay();
+            const diff = day === 0 ? -6 : 1 - day;
+            const monday = new Date(now);
+            monday.setDate(now.getDate() + diff);
+            monday.setHours(0, 0, 0, 0);
+            return monday;
+        }
+
+        function getTodayItems(items, provider) {
+            const todayStr = getDateStr(new Date());
+            if (provider === 'ticktick') {
+                return items.filter(t => {
+                    if (!t.isCompleted && t.dueDate) {
+                        return getDateStr(new Date(t.dueDate)) <= todayStr;
+                    }
+                    if (t.isCompleted && t.completedTime) {
+                        return getDateStr(new Date(t.completedTime)) === todayStr;
+                    }
+                    return false;
+                });
+            } else {
+                return items.filter(e => e.receivedDateTime && getDateStr(new Date(e.receivedDateTime)) === todayStr);
+            }
+        }
+
+        function getItemsForDay(items, dateStr, provider, isToday, isPast) {
+            if (provider === 'ticktick') {
+                const todayStr = getDateStr(new Date());
+                if (isToday) {
+                    return items.filter(t => {
+                        if (!t.isCompleted && t.dueDate) return getDateStr(new Date(t.dueDate)) <= todayStr;
+                        if (t.isCompleted && t.completedTime) return getDateStr(new Date(t.completedTime)) === todayStr;
+                        return false;
+                    });
+                } else if (isPast) {
+                    return items.filter(t => t.isCompleted && t.completedTime && getDateStr(new Date(t.completedTime)) === dateStr);
+                } else {
+                    return items.filter(t => !t.isCompleted && t.dueDate && getDateStr(new Date(t.dueDate)) === dateStr);
+                }
+            } else {
+                return items.filter(e => e.receivedDateTime && getDateStr(new Date(e.receivedDateTime)) === dateStr);
+            }
+        }
+
+        // UI helpers
+        function createCard(item, account) {
+            const card = document.createElement('div');
+            card.className = 'email-card';
+            card.style.borderLeftColor = account.color;
+
+            if (account.provider === 'ticktick') {
+                const label = item.isCompleted ? `✓ ${item.projectName}` : item.projectName;
+                card.innerHTML = `
+                    <div class="email-sender">${escapeHtml(item.title)}</div>
+                    ${item.content ? `<div class="email-subject">${escapeHtml(item.content.substring(0, 80))}</div>` : ''}
+                    <div class="email-time">${escapeHtml(label)}</div>
+                `;
+                card.style.opacity = item.isCompleted ? '0.6' : '1';
+                card.style.textDecoration = item.isCompleted ? 'line-through' : 'none';
+            } else {
+                card.innerHTML = `
+                    <div class="email-sender">${escapeHtml(item.sender)}</div>
+                    <div class="email-subject">${escapeHtml(item.subject)}</div>
+                    <div class="email-time">${new Date(item.receivedDateTime).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}</div>
+                `;
+            }
+
+            card.onclick = () => window.open(item.webLink, '_blank');
+            return card;
+        }
+
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text || '';
+            return div.innerHTML;
+        }
+
+        // Modals
+        function showAddAccountModal() { document.getElementById('addAccountModal').classList.remove('hidden'); }
+        function showSettingsModal() { renderAccountList(); document.getElementById('settingsModal').classList.remove('hidden'); }
+        function closeModal(e) { if (e.target.classList.contains('modal-overlay')) e.target.classList.add('hidden'); }
+        function closeAllModals() { document.querySelectorAll('.modal-overlay').forEach(m => m.classList.add('hidden')); }
+
+        function addAccount(provider) {
+            closeAllModals();
+            document.getElementById('setupTitle').textContent = `Add ${PROVIDER_NAMES[provider]} Account`;
+            document.getElementById('setupProvider').value = provider;
+            document.getElementById('setupAccountId').value = '';
+            document.getElementById('accountName').value = '';
+            document.getElementById('gmailNum').value = '0';
+            document.getElementById('gmailNumGroup').classList.toggle('hidden', provider !== 'gmail');
+
+            const picker = document.getElementById('colorPicker');
+            picker.innerHTML = '';
+            COLORS.forEach((c, i) => {
+                const opt = document.createElement('div');
+                opt.className = `color-option${i === 0 ? ' selected' : ''}`;
+                opt.style.background = c;
+                opt.onclick = () => { picker.querySelectorAll('.color-option').forEach(o => o.classList.remove('selected')); opt.classList.add('selected'); };
+                picker.appendChild(opt);
+            });
+
+            document.getElementById('setupModal').classList.remove('hidden');
+        }
+
+        async function saveAccount(e) {
+            e.preventDefault();
+            const provider = document.getElementById('setupProvider').value;
+            const name = document.getElementById('accountName').value;
+            const color = document.querySelector('#colorPicker .color-option.selected')?.style.background || COLORS[0];
+            const gmailNum = parseInt(document.getElementById('gmailNum').value) || 0;
+
+            try {
+                const data = await api('/accounts', {
+                    method: 'POST',
+                    body: JSON.stringify({ name, provider, color, gmail_account_number: gmailNum })
+                });
+
+                closeAllModals();
+
+                // Start OAuth
+                const authData = await api(`/auth/authorize/${provider}?account_id=${data.account.id}`);
+                window.location.href = authData.auth_url;
+            } catch (err) {
+                alert('Error: ' + err.message);
+            }
+        }
+
+        async function removeAccount(id) {
+            if (!confirm('Remove this account?')) return;
+            await api(`/accounts/${id}`, { method: 'DELETE' });
+            await loadAccounts();
+            renderAccountList();
+        }
+
+        function renderAccountList() {
+            const list = document.getElementById('accountList');
+            if (accounts.length === 0) {
+                list.innerHTML = '<p style="color:#666;text-align:center;">No accounts</p>';
+                return;
+            }
+            list.innerHTML = accounts.map(a => `
+                <div class="account-item">
+                    <div class="color-dot" style="background:${a.color}"></div>
+                    <div class="info">
+                        <strong>${escapeHtml(a.name)}</strong>
+                        <span>${PROVIDER_ICONS[a.provider]} ${PROVIDER_NAMES[a.provider]}</span>
+                    </div>
+                    <button class="danger" onclick="removeAccount('${a.id}')" style="padding:0.25rem 0.5rem;font-size:0.75rem;">Remove</button>
+                </div>
+            `).join('');
+        }
+
+        // Handle OAuth callback
+        function handleCallback() {
+            const params = new URLSearchParams(window.location.search);
+            if (params.get('oauth') === 'success') {
+                window.history.replaceState({}, '', window.location.pathname);
+                // Will reload accounts after auth check
+            } else if (params.get('error')) {
+                alert('OAuth error: ' + params.get('error'));
+                window.history.replaceState({}, '', window.location.pathname);
+            }
+        }
+
+        // Init
+        handleCallback();
+        checkAuth();
+    </script>
+</body>
+</html>
